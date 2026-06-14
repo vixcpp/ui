@@ -1,6 +1,6 @@
 /**
  *
- *  @file Result.cpp
+ *  @file Version.cpp
  *  @author Gaspard Kirira
  *
  *  Copyright 2025, Gaspard Kirira.
@@ -13,22 +13,28 @@
  *  Vix.cpp
  *
  */
-#include <vix/ui/support/Result.hpp>
+#include <vix/ui/Version.hpp>
 
 namespace vix::ui
 {
-  std::string_view to_string(ResultStatus status) noexcept
+  int version_major() noexcept
   {
-    switch (status)
-    {
-    case ResultStatus::Ok:
-      return "ok";
+    return VERSION_MAJOR;
+  }
 
-    case ResultStatus::Failed:
-      return "failed";
-    }
+  int version_minor() noexcept
+  {
+    return VERSION_MINOR;
+  }
 
-    return "unknown";
+  int version_patch() noexcept
+  {
+    return VERSION_PATCH;
+  }
+
+  std::string_view version() noexcept
+  {
+    return VERSION;
   }
 
 } // namespace vix::ui
