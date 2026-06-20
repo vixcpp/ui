@@ -16,6 +16,7 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <utility>
 
 #include <vix/ui/platform/Platform.hpp>
 #include <vix/ui/shell/AppShell.hpp>
@@ -371,6 +372,247 @@ static void test_app_shell_platform()
   assert(shell.platform().name() == "web");
 }
 
+static void test_app_shell_start_is_idempotent()
+{
+  AppShell shell;
+
+  Result<void> first = shell.start();
+  Result<void> second = shell.start();
+
+  assert(first.is_ok());
+  assert(second.is_ok());
+  assert(shell.running());
+  assert(shell.status() == "running");
+}
+
+static void test_app_shell_stop_is_idempotent()
+{
+  AppShell shell;
+
+  Result<void> first = shell.stop();
+  Result<void> second = shell.stop();
+
+  assert(first.is_ok());
+  assert(second.is_ok());
+  assert(shell.stopped());
+  assert(shell.status() == "stopped");
+}
+
+static void test_app_shell_copy_constructor()
+{
+  ShellConfig config;
+  config.set_name("Copied App");
+  config.set_title("Copied Title");
+  config.set_url("http://localhost:5050");
+
+  AppShell original(config);
+  AppShell copy(original);
+
+  assert(copy.config().name() == "Copied App");
+  assert(copy.config().title() == "Copied Title");
+  assert(copy.target_url() == "http://localhost:5050");
+  assert(copy.stopped());
+
+  Result<void> result = copy.start();
+
+  assert(result.is_ok());
+  assert(copy.running());
+  assert(original.stopped());
+}
+
+static void test_app_shell_copy_assignment()
+{
+  ShellConfig config;
+  config.set_name("Assigned App");
+  config.set_title("Assigned Title");
+  config.set_url("http://localhost:6060");
+
+  AppShell source(config);
+  AppShell target;
+
+  target = source;
+
+  assert(target.config().name() == "Assigned App");
+  assert(target.config().title() == "Assigned Title");
+  assert(target.target_url() == "http://localhost:6060");
+  assert(target.stopped());
+
+  Result<void> result = target.start();
+
+  assert(result.is_ok());
+  assert(target.running());
+  assert(source.stopped());
+}
+
+static void test_app_shell_move_constructor()
+{
+  ShellConfig config;
+  config.set_name("Moved App");
+  config.set_title("Moved Title");
+  config.set_url("http://localhost:7070");
+
+  AppShell original(config);
+  AppShell moved(std::move(original));
+
+  assert(moved.config().name() == "Moved App");
+  assert(moved.config().title() == "Moved Title");
+  assert(moved.target_url() == "http://localhost:7070");
+
+  Result<void> result = moved.start();
+
+  assert(result.is_ok());
+  assert(moved.running());
+}
+
+static void test_app_shell_move_assignment()
+{
+  ShellConfig config;
+  config.set_name("Move Assigned App");
+  config.set_title("Move Assigned Title");
+  config.set_url("http://localhost:8088");
+
+  AppShell source(config);
+  AppShell target;
+
+  target = std::move(source);
+
+  assert(target.config().name() == "Move Assigned App");
+  assert(target.config().title() == "Move Assigned Title");
+  assert(target.target_url() == "http://localhost:8088");
+
+  Result<void> result = target.start();
+
+  assert(result.is_ok());
+  assert(target.running());
+}
+
+static void test_app_shell_set_config_when_stopped_recreates_backend()
+{
+  AppShell shell;
+
+  ShellConfig config;
+  config.set_name("Stopped Config App");
+  config.set_title("Stopped Config Title");
+  config.set_url("http://localhost:9091");
+
+  shell.set_config(config);
+
+  assert(shell.stopped());
+  assert(shell.config().name() == "Stopped Config App");
+  assert(shell.config().title() == "Stopped Config Title");
+  assert(shell.target_url() == "http://localhost:9091");
+
+  Result<void> result = shell.start();
+
+  assert(result.is_ok());
+  assert(shell.running());
+}
+
+static void test_app_shell_set_config_while_running_keeps_shell_running()
+{
+  AppShell shell;
+
+  Result<void> start_result = shell.start();
+
+  assert(start_result.is_ok());
+  assert(shell.running());
+
+  ShellConfig config;
+  config.set_name("Running Config App");
+  config.set_title("Running Config Title");
+  config.set_url("http://localhost:9092");
+
+  shell.set_config(config);
+
+  assert(shell.running());
+  assert(shell.config().name() == "Running Config App");
+  assert(shell.config().title() == "Running Config Title");
+  assert(shell.target_url() == "http://localhost:9092");
+}
+
+static void test_shell_config_server_command()
+{
+  ShellConfig config;
+
+  assert(config.server_command().empty());
+  assert(config.server_working_directory().empty());
+  assert(!config.has_server_command());
+  assert(!config.has_server_working_directory());
+
+  config.set_server_command("vix run main.cpp --port 8080");
+  config.set_server_working_directory("/tmp/app");
+
+  assert(config.server_command() == "vix run main.cpp --port 8080");
+  assert(config.server_working_directory() == "/tmp/app");
+  assert(config.has_server_command());
+  assert(config.has_server_working_directory());
+}
+
+static void test_app_shell_ignores_server_command_when_start_server_disabled()
+{
+  ShellConfig config;
+
+  config.set_name("No Server App")
+      .set_title("No Server Title")
+      .set_url("http://localhost:9093")
+      .set_start_server(false)
+      .set_server_command("this-command-should-not-run");
+
+  AppShell shell(config);
+
+  Result<void> start_result = shell.start();
+
+  assert(start_result.is_ok());
+  assert(shell.running());
+
+  Result<void> stop_result = shell.stop();
+
+  assert(stop_result.is_ok());
+  assert(shell.stopped());
+}
+
+static void test_app_shell_starts_and_stops_server_process()
+{
+#if defined(__unix__) || defined(__APPLE__)
+  ShellConfig config;
+
+  config.set_name("Server Process App")
+      .set_title("Server Process Title")
+      .set_url("http://127.0.0.1:9094")
+      .set_start_server(true)
+      .set_server_command("sleep 30");
+
+  AppShell shell(config);
+
+  Result<void> start_result = shell.start();
+
+  assert(start_result.is_ok());
+  assert(shell.running());
+
+  Result<void> stop_result = shell.stop();
+
+  assert(stop_result.is_ok());
+  assert(shell.stopped());
+#else
+  ShellConfig config;
+
+  config.set_name("Server Process App")
+      .set_title("Server Process Title")
+      .set_url("http://127.0.0.1:9094")
+      .set_start_server(false)
+      .set_server_command("sleep 30");
+
+  AppShell shell(config);
+
+  Result<void> result = shell.start();
+
+  assert(result.is_ok());
+  assert(shell.running());
+
+  (void)shell.stop();
+#endif
+}
+
 int main()
 {
   test_platform_kind_to_string();
@@ -383,6 +625,7 @@ int main()
   test_shell_config_defaults();
   test_shell_config_make();
   test_shell_config_setters();
+  test_shell_config_server_command();
   test_shell_config_effective_url_uses_local_url_when_no_url();
 
   test_app_shell_default();
@@ -398,6 +641,16 @@ int main()
   test_app_shell_stop();
   test_app_shell_restart();
   test_app_shell_platform();
+  test_app_shell_start_is_idempotent();
+  test_app_shell_stop_is_idempotent();
+  test_app_shell_copy_constructor();
+  test_app_shell_copy_assignment();
+  test_app_shell_move_constructor();
+  test_app_shell_move_assignment();
+  test_app_shell_set_config_when_stopped_recreates_backend();
+  test_app_shell_set_config_while_running_keeps_shell_running();
+  test_app_shell_ignores_server_command_when_start_server_disabled();
+  test_app_shell_starts_and_stops_server_process();
 
   std::cout << "[OK] ui app shell tests passed\n";
   return 0;

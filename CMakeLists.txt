@@ -12,7 +12,7 @@ endif()
 set_property(GLOBAL PROPERTY VIX_UI_MODULE_ALREADY_INCLUDED TRUE)
 
 project(ui
-  VERSION 0.1.0
+  VERSION 0.2.0
   DESCRIPTION "Web-first UI and app shell primitives for Vix.cpp applications"
   LANGUAGES CXX
 )
@@ -25,6 +25,7 @@ option(UI_BUILD_TESTS "Build ui tests" ON)
 option(UI_BUILD_EXAMPLES "Build ui examples" ON)
 option(UI_BUILD_BENCHMARKS "Build ui benchmarks" OFF)
 option(UI_INSTALL "Enable standalone install/package rules" ON)
+option(VIX_UI_ENABLE_LINUX_WEBVIEW "Enable Linux desktop WebView shell backend" OFF)
 
 if(DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
   set(UI_BUILD_TESTS OFF CACHE BOOL "Build ui tests" FORCE)
@@ -81,6 +82,41 @@ else()
 endif()
 
 # ============================================================================
+# Optional Linux WebView backend dependencies
+# ============================================================================
+
+set(_VIX_UI_LINUX_WEBVIEW_ENABLED OFF)
+set(_VIX_UI_WEBKITGTK_TARGET "")
+
+if(VIX_UI_ENABLE_LINUX_WEBVIEW)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message(FATAL_ERROR "[ui] VIX_UI_ENABLE_LINUX_WEBVIEW is only supported on Linux")
+  endif()
+
+  find_package(PkgConfig REQUIRED)
+
+  pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
+
+  pkg_check_modules(WEBKITGTK_41 QUIET IMPORTED_TARGET webkit2gtk-4.1)
+
+  if(WEBKITGTK_41_FOUND)
+    set(_VIX_UI_WEBKITGTK_TARGET PkgConfig::WEBKITGTK_41)
+  else()
+    pkg_check_modules(WEBKITGTK_40 QUIET IMPORTED_TARGET webkit2gtk-4.0)
+
+    if(WEBKITGTK_40_FOUND)
+      set(_VIX_UI_WEBKITGTK_TARGET PkgConfig::WEBKITGTK_40)
+    endif()
+  endif()
+
+  if(NOT _VIX_UI_WEBKITGTK_TARGET)
+    message(FATAL_ERROR "[ui] missing WebKitGTK dependency: install webkit2gtk-4.1 or webkit2gtk-4.0 development package")
+  endif()
+
+  set(_VIX_UI_LINUX_WEBVIEW_ENABLED ON)
+endif()
+
+# ============================================================================
 # Library
 # ============================================================================
 
@@ -111,6 +147,9 @@ set(UI_SOURCES
 
   src/shell/ShellConfig.cpp
   src/shell/AppShell.cpp
+  src/shell/backends/DescriptorShellBackend.cpp
+  src/shell/backends/LinuxWebViewShellBackend.cpp
+  src/shell/ServerProcess.cpp
 )
 
 add_library(ui STATIC ${UI_SOURCES})
@@ -128,6 +167,19 @@ target_include_directories(ui
 target_compile_features(ui PUBLIC cxx_std_20)
 
 target_link_libraries(ui PUBLIC ${_VIX_UI_TEMPLATE_TARGET})
+
+if(_VIX_UI_LINUX_WEBVIEW_ENABLED)
+  target_compile_definitions(ui
+    PRIVATE
+      VIX_UI_ENABLE_LINUX_WEBVIEW
+  )
+
+  target_link_libraries(ui
+    PRIVATE
+      PkgConfig::GTK3
+      ${_VIX_UI_WEBKITGTK_TARGET}
+  )
+endif()
 
 # ============================================================================
 # Warnings

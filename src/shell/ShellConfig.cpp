@@ -96,6 +96,18 @@ namespace vix::ui
     return *this;
   }
 
+  ShellConfig &ShellConfig::set_server_command(std::string command)
+  {
+    server_command_ = std::move(command);
+    return *this;
+  }
+
+  ShellConfig &ShellConfig::set_server_working_directory(std::string directory)
+  {
+    server_working_directory_ = std::move(directory);
+    return *this;
+  }
+
   const std::string &ShellConfig::name() const noexcept
   {
     return name_;
@@ -156,6 +168,16 @@ namespace vix::ui
     return start_server_;
   }
 
+  const std::string &ShellConfig::server_command() const noexcept
+  {
+    return server_command_;
+  }
+
+  const std::string &ShellConfig::server_working_directory() const noexcept
+  {
+    return server_working_directory_;
+  }
+
   bool ShellConfig::has_name() const noexcept
   {
     return !name_.empty();
@@ -169,6 +191,16 @@ namespace vix::ui
   bool ShellConfig::has_url() const noexcept
   {
     return !url_.empty();
+  }
+
+  bool ShellConfig::has_server_command() const noexcept
+  {
+    return !server_command_.empty();
+  }
+
+  bool ShellConfig::has_server_working_directory() const noexcept
+  {
+    return !server_working_directory_.empty();
   }
 
   std::string ShellConfig::local_url() const

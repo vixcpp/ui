@@ -145,6 +145,33 @@ namespace vix::ui
     ShellConfig &set_start_server(bool value) noexcept;
 
     /**
+     * @brief Set the local server command started by the shell.
+     *
+     * This command is optional. If it is empty, the shell only opens the
+     * configured URL and does not start an external server process.
+     *
+     * Example:
+     *
+     * @code
+     * vix run examples/desktop_app.cpp --port 8080
+     * @endcode
+     *
+     * @param command Server command.
+     * @return This configuration.
+     */
+    ShellConfig &set_server_command(std::string command);
+
+    /**
+     * @brief Set the working directory used by the local server command.
+     *
+     * If empty, the current process working directory is used.
+     *
+     * @param directory Working directory.
+     * @return This configuration.
+     */
+    ShellConfig &set_server_working_directory(std::string directory);
+
+    /**
      * @brief Get the shell application name.
      *
      * @return Application name.
@@ -229,6 +256,20 @@ namespace vix::ui
     [[nodiscard]] bool start_server() const noexcept;
 
     /**
+     * @brief Get the local server command.
+     *
+     * @return Server command.
+     */
+    [[nodiscard]] const std::string &server_command() const noexcept;
+
+    /**
+     * @brief Get the local server working directory.
+     *
+     * @return Working directory.
+     */
+    [[nodiscard]] const std::string &server_working_directory() const noexcept;
+
+    /**
      * @brief Check whether the configuration has an application name.
      *
      * @return True if name is not empty.
@@ -248,6 +289,20 @@ namespace vix::ui
      * @return True if URL is not empty.
      */
     [[nodiscard]] bool has_url() const noexcept;
+
+    /**
+     * @brief Check whether a local server command is configured.
+     *
+     * @return True if a server command is set.
+     */
+    [[nodiscard]] bool has_server_command() const noexcept;
+
+    /**
+     * @brief Check whether a local server working directory is configured.
+     *
+     * @return True if a server working directory is set.
+     */
+    [[nodiscard]] bool has_server_working_directory() const noexcept;
 
     /**
      * @brief Build a local HTTP URL from the host and port.
@@ -329,6 +384,16 @@ namespace vix::ui
      * @brief Whether the shell should start the local server.
      */
     bool start_server_{true};
+
+    /**
+     * @brief Optional command used to start the local Vix server.
+     */
+    std::string server_command_;
+
+    /**
+     * @brief Optional working directory for the local server command.
+     */
+    std::string server_working_directory_;
   };
 
 } // namespace vix::ui

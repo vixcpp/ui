@@ -28,3 +28,21 @@ target_link_libraries(ui_example_assets
   PRIVATE
     vix::ui
 )
+
+add_executable(ui_example_desktop_shell_basic
+  desktop_shell_basic.cpp
+)
+
+target_link_libraries(ui_example_desktop_shell_basic
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_desktop_shell_with_server
+  desktop_shell_with_server.cpp
+)
+
+target_link_libraries(ui_example_desktop_shell_with_server
+  PRIVATE
+    vix::ui
+)
