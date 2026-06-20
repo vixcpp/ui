@@ -7,13 +7,31 @@ function(ui_add_test target source)
     ${source}
   )
 
+  target_compile_features(${target}
+    PRIVATE
+      cxx_std_20
+  )
+
   target_link_libraries(${target}
     PRIVATE
       vix::ui
   )
 
+  if(VIX_ENABLE_SANITIZERS AND NOT MSVC)
+    target_compile_options(${target}
+      PRIVATE
+        -fno-omit-frame-pointer
+        -fsanitize=address,undefined
+    )
+
+    target_link_options(${target}
+      PRIVATE
+        -fsanitize=address,undefined
+    )
+  endif()
+
   add_test(
-    NAME ${target}
+    NAME ui.${target}
     COMMAND ${target}
   )
 endfunction()
