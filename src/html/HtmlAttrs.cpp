@@ -26,7 +26,7 @@ namespace vix::ui
   {
     for (auto &[name, value] : attrs)
     {
-      set(std::move(name), std::move(value));
+      set(name, std::move(value));
     }
   }
 
