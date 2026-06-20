@@ -322,7 +322,8 @@ namespace vix::ui
     case FieldType::File:
       attrs.set("type", std::string(to_string(type_)));
 
-      if (type_ != FieldType::File)
+      if (type_ != FieldType::File &&
+          type_ != FieldType::Password)
       {
         attrs.set("value", value_);
       }

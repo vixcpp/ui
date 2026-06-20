@@ -355,9 +355,21 @@ namespace vix::ui
 
   bool Form::valid() const noexcept
   {
-    return errors_.empty();
-  }
+    if (!errors_.empty())
+    {
+      return false;
+    }
 
+    for (const auto &field : fields_)
+    {
+      if (field.invalid())
+      {
+        return false;
+      }
+    }
+
+    return true;
+  }
   bool Form::invalid() const noexcept
   {
     return !valid();

@@ -20,6 +20,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <vix/ui/assets/Asset.hpp>
 #include <vix/ui/assets/AssetManifest.hpp>
@@ -258,6 +259,11 @@ namespace vix::ui
      * @brief Public base URL for assets.
      */
     std::string base_url_;
+
+    /**
+     * @brief Asset insertion order.
+     */
+    std::vector<std::string> order_;
 
     /**
      * @brief Named assets.

@@ -111,7 +111,7 @@ static void test_password_field_render()
 
   assert(
       field.render() ==
-      R"(<input id="password" name="password" placeholder="Password" type="password" value="">)");
+      R"(<input id="password" name="password" placeholder="Password" type="password">)");
 }
 
 static void test_hidden_field_render()

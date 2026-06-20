@@ -16,6 +16,7 @@
 #include <vix/ui/assets/AssetManager.hpp>
 #include <vix/ui/support/Error.hpp>
 
+#include <algorithm>
 #include <utility>
 
 namespace vix::ui
@@ -72,17 +73,22 @@ namespace vix::ui
 
     std::vector<Asset> collect_assets(
         const std::map<std::string, Asset> &assets,
+        const std::vector<std::string> &order,
         AssetType type)
     {
       std::vector<Asset> output;
 
-      for (const auto &[name, asset] : assets)
+      for (const auto &name : order)
       {
-        (void)name;
-
-        if (asset.type() == type)
+        const auto it = assets.find(name);
+        if (it == assets.end())
         {
-          output.push_back(asset);
+          continue;
+        }
+
+        if (it->second.type() == type)
+        {
+          output.push_back(it->second);
         }
       }
 
@@ -123,6 +129,13 @@ namespace vix::ui
     if (!asset.has_url())
     {
       throw AssetError("cannot register UI asset without a URL");
+    }
+
+    const bool already_exists = has(name);
+
+    if (!already_exists)
+    {
+      order_.push_back(name);
     }
 
     assets_[std::move(name)] = std::move(asset);
@@ -197,12 +210,22 @@ namespace vix::ui
 
   bool AssetManager::remove(const std::string &name)
   {
-    return assets_.erase(name) > 0;
+    const bool removed = assets_.erase(name) > 0;
+
+    if (removed)
+    {
+      order_.erase(
+          std::remove(order_.begin(), order_.end(), name),
+          order_.end());
+    }
+
+    return removed;
   }
 
   void AssetManager::clear() noexcept
   {
     assets_.clear();
+    order_.clear();
   }
 
   bool AssetManager::empty() const noexcept
@@ -229,10 +252,15 @@ namespace vix::ui
   {
     AssetManifest manifest;
 
-    for (const auto &[name, asset] : assets_)
+    for (const auto &name : order_)
     {
-      (void)name;
-      manifest.add(asset);
+      const auto it = assets_.find(name);
+      if (it == assets_.end())
+      {
+        continue;
+      }
+
+      manifest.add(it->second);
     }
 
     return manifest;
@@ -245,7 +273,7 @@ namespace vix::ui
 
   std::string AssetManager::render_type(AssetType type) const
   {
-    return AssetManifest(collect_assets(assets_, type)).render();
+    return AssetManifest(collect_assets(assets_, order_, type)).render();
   }
 
   std::string AssetManager::render_stylesheets() const
