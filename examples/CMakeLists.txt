@@ -64,3 +64,30 @@ target_link_libraries(ui_example_shell_config_v04
   PRIVATE
     vix::ui
 )
+
+add_executable(ui_example_fragment
+  06_fragment.cpp
+)
+
+target_link_libraries(ui_example_fragment
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_live_update
+  07_live_update.cpp
+)
+
+target_link_libraries(ui_example_live_update
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_flash_and_toast
+  08_flash_and_toast.cpp
+)
+
+target_link_libraries(ui_example_flash_and_toast
+  PRIVATE
+    vix::ui
+)

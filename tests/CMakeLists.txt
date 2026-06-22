@@ -49,3 +49,8 @@ ui_add_test(ui_form_test forms/form_test.cpp)
 ui_add_test(ui_app_shell_test shell/app_shell_test.cpp)
 ui_add_test(ui_server_process_test shell/server_process_test.cpp)
 ui_add_test(ui_server_readiness_test shell/server_readiness_test.cpp)
+
+ui_add_test(ui_fragment_test live/fragment_test.cpp)
+ui_add_test(ui_live_update_test live/live_update_test.cpp)
+ui_add_test(ui_flash_message_test live/flash_message_test.cpp)
+ui_add_test(ui_toast_test live/toast_test.cpp)

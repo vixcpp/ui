@@ -55,6 +55,14 @@
 #include <vix/ui/forms/ValidationError.hpp>
 
 /*
+ * Live UI
+ */
+#include <vix/ui/live/Fragment.hpp>
+#include <vix/ui/live/LiveUpdate.hpp>
+#include <vix/ui/live/FlashMessage.hpp>
+#include <vix/ui/live/Toast.hpp>
+
+/*
  * Platform
  */
 #include <vix/ui/platform/Platform.hpp>
