@@ -18,6 +18,7 @@
 #include <vix/ui/shell/backends/ShellBackend.hpp>
 #include <vix/ui/shell/backends/LinuxWebViewShellBackend.hpp>
 #include <vix/ui/shell/ServerProcess.hpp>
+#include <vix/ui/shell/ServerReadiness.hpp>
 
 #include <utility>
 
@@ -149,6 +150,13 @@ namespace vix::ui
       return server_result;
     }
 
+    Result<void> readiness_result = wait_for_server_if_needed();
+    if (readiness_result.is_failed())
+    {
+      (void)stop_server_if_needed();
+      return readiness_result;
+    }
+
     Result<void> shell_result = start_platform_shell();
     if (shell_result.is_failed())
     {
@@ -277,6 +285,28 @@ namespace vix::ui
     }
 
     return result;
+  }
+
+  Result<void> AppShell::wait_for_server_if_needed()
+  {
+    if (!config_.start_server())
+    {
+      return Result<void>::ok();
+    }
+
+    if (!config_.wait_for_server())
+    {
+      return Result<void>::ok();
+    }
+
+    if (!config_.has_server_command())
+    {
+      return Result<void>::ok();
+    }
+
+    return ServerReadiness::wait(
+        config_.effective_readiness_url(),
+        config_.startup_timeout());
   }
 
   std::unique_ptr<ShellBackend> AppShell::make_backend() const

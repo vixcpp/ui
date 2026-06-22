@@ -150,6 +150,7 @@ set(UI_SOURCES
   src/shell/backends/DescriptorShellBackend.cpp
   src/shell/backends/LinuxWebViewShellBackend.cpp
   src/shell/ServerProcess.cpp
+  src/shell/ServerReadiness.cpp
 )
 
 add_library(ui STATIC ${UI_SOURCES})

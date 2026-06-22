@@ -36,9 +36,39 @@ namespace vix::ui
     return *this;
   }
 
+  ShellConfig &ShellConfig::set_app_id(std::string app_id)
+  {
+    app_id_ = std::move(app_id);
+    return *this;
+  }
+
+  ShellConfig &ShellConfig::set_app_version(std::string version)
+  {
+    app_version_ = std::move(version);
+    return *this;
+  }
+
+  ShellConfig &ShellConfig::set_vendor(std::string vendor)
+  {
+    vendor_ = std::move(vendor);
+    return *this;
+  }
+
+  ShellConfig &ShellConfig::set_icon_path(std::string path)
+  {
+    icon_path_ = std::move(path);
+    return *this;
+  }
+
   ShellConfig &ShellConfig::set_url(std::string url)
   {
     url_ = std::move(url);
+    return *this;
+  }
+
+  ShellConfig &ShellConfig::set_readiness_url(std::string url)
+  {
+    readiness_url_ = std::move(url);
     return *this;
   }
 
@@ -96,6 +126,19 @@ namespace vix::ui
     return *this;
   }
 
+  ShellConfig &ShellConfig::set_wait_for_server(bool value) noexcept
+  {
+    wait_for_server_ = value;
+    return *this;
+  }
+
+  ShellConfig &ShellConfig::set_startup_timeout(
+      std::chrono::milliseconds timeout) noexcept
+  {
+    startup_timeout_ = timeout;
+    return *this;
+  }
+
   ShellConfig &ShellConfig::set_server_command(std::string command)
   {
     server_command_ = std::move(command);
@@ -118,9 +161,34 @@ namespace vix::ui
     return title_;
   }
 
+  const std::string &ShellConfig::app_id() const noexcept
+  {
+    return app_id_;
+  }
+
+  const std::string &ShellConfig::app_version() const noexcept
+  {
+    return app_version_;
+  }
+
+  const std::string &ShellConfig::vendor() const noexcept
+  {
+    return vendor_;
+  }
+
+  const std::string &ShellConfig::icon_path() const noexcept
+  {
+    return icon_path_;
+  }
+
   const std::string &ShellConfig::url() const noexcept
   {
     return url_;
+  }
+
+  const std::string &ShellConfig::readiness_url() const noexcept
+  {
+    return readiness_url_;
   }
 
   const std::string &ShellConfig::host() const noexcept
@@ -168,6 +236,16 @@ namespace vix::ui
     return start_server_;
   }
 
+  bool ShellConfig::wait_for_server() const noexcept
+  {
+    return wait_for_server_;
+  }
+
+  std::chrono::milliseconds ShellConfig::startup_timeout() const noexcept
+  {
+    return startup_timeout_;
+  }
+
   const std::string &ShellConfig::server_command() const noexcept
   {
     return server_command_;
@@ -188,9 +266,34 @@ namespace vix::ui
     return !title_.empty();
   }
 
+  bool ShellConfig::has_app_id() const noexcept
+  {
+    return !app_id_.empty();
+  }
+
+  bool ShellConfig::has_app_version() const noexcept
+  {
+    return !app_version_.empty();
+  }
+
+  bool ShellConfig::has_vendor() const noexcept
+  {
+    return !vendor_.empty();
+  }
+
+  bool ShellConfig::has_icon_path() const noexcept
+  {
+    return !icon_path_.empty();
+  }
+
   bool ShellConfig::has_url() const noexcept
   {
     return !url_.empty();
+  }
+
+  bool ShellConfig::has_readiness_url() const noexcept
+  {
+    return !readiness_url_.empty();
   }
 
   bool ShellConfig::has_server_command() const noexcept
@@ -216,6 +319,16 @@ namespace vix::ui
     }
 
     return local_url();
+  }
+
+  std::string ShellConfig::effective_readiness_url() const
+  {
+    if (!readiness_url_.empty())
+    {
+      return readiness_url_;
+    }
+
+    return effective_url();
   }
 
 } // namespace vix::ui

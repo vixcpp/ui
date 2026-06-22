@@ -97,6 +97,42 @@ namespace vix::ui
         GTK_WINDOW(window),
         config.resizable() ? TRUE : FALSE);
 
+    if (config.has_icon_path())
+    {
+      GError *icon_error = nullptr;
+
+      const gboolean icon_loaded = gtk_window_set_icon_from_file(
+          GTK_WINDOW(window),
+          config.icon_path().c_str(),
+          &icon_error);
+
+      if (icon_loaded == FALSE)
+      {
+        std::string message =
+            "Linux WebView shell backend could not load icon: " +
+            config.icon_path();
+
+        if (icon_error != nullptr && icon_error->message != nullptr)
+        {
+          message += " (";
+          message += icon_error->message;
+          message += ")";
+        }
+
+        if (icon_error != nullptr)
+        {
+          g_error_free(icon_error);
+        }
+
+        running_ = false;
+        reset_runtime_state();
+
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            std::move(message));
+      }
+    }
+
     if (config.fullscreen())
     {
       gtk_window_fullscreen(GTK_WINDOW(window));

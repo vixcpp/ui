@@ -17,6 +17,7 @@
 #include <iostream>
 #include <string>
 #include <utility>
+#include <chrono>
 
 #include <vix/ui/platform/Platform.hpp>
 #include <vix/ui/shell/AppShell.hpp>
@@ -178,6 +179,95 @@ static void test_shell_config_setters()
 
   assert(config.local_url() == "http://0.0.0.0:9090");
   assert(config.effective_url() == "http://localhost:3000");
+}
+
+static void test_shell_config_metadata()
+{
+  ShellConfig config;
+
+  assert(config.app_id().empty());
+  assert(config.app_version().empty());
+  assert(config.vendor().empty());
+
+  assert(!config.has_app_id());
+  assert(!config.has_app_version());
+  assert(!config.has_vendor());
+
+  config.set_app_id("com.softadastra.vix.demo")
+      .set_app_version("0.4.0")
+      .set_vendor("Softadastra");
+
+  assert(config.app_id() == "com.softadastra.vix.demo");
+  assert(config.app_version() == "0.4.0");
+  assert(config.vendor() == "Softadastra");
+
+  assert(config.has_app_id());
+  assert(config.has_app_version());
+  assert(config.has_vendor());
+}
+
+static void test_shell_config_icon_path()
+{
+  ShellConfig config;
+
+  assert(config.icon_path().empty());
+  assert(!config.has_icon_path());
+
+  config.set_icon_path("assets/icon.png");
+
+  assert(config.icon_path() == "assets/icon.png");
+  assert(config.has_icon_path());
+}
+
+static void test_shell_config_readiness_url()
+{
+  ShellConfig config;
+
+  assert(config.readiness_url().empty());
+  assert(!config.has_readiness_url());
+
+  config.set_readiness_url("http://127.0.0.1:8080/health");
+
+  assert(config.readiness_url() == "http://127.0.0.1:8080/health");
+  assert(config.has_readiness_url());
+  assert(config.effective_readiness_url() == "http://127.0.0.1:8080/health");
+}
+
+static void test_shell_config_effective_readiness_url_uses_effective_url()
+{
+  ShellConfig config;
+
+  config.set_url("http://localhost:3000");
+
+  assert(config.readiness_url().empty());
+  assert(config.effective_url() == "http://localhost:3000");
+  assert(config.effective_readiness_url() == "http://localhost:3000");
+}
+
+static void test_shell_config_wait_for_server_flag()
+{
+  ShellConfig config;
+
+  assert(config.wait_for_server());
+
+  config.set_wait_for_server(false);
+
+  assert(!config.wait_for_server());
+
+  config.set_wait_for_server(true);
+
+  assert(config.wait_for_server());
+}
+
+static void test_shell_config_startup_timeout()
+{
+  ShellConfig config;
+
+  assert(config.startup_timeout() == std::chrono::milliseconds(5000));
+
+  config.set_startup_timeout(std::chrono::milliseconds(2500));
+
+  assert(config.startup_timeout() == std::chrono::milliseconds(2500));
 }
 
 static void test_shell_config_effective_url_uses_local_url_when_no_url()
@@ -580,6 +670,7 @@ static void test_app_shell_starts_and_stops_server_process()
       .set_title("Server Process Title")
       .set_url("http://127.0.0.1:9094")
       .set_start_server(true)
+      .set_wait_for_server(false)
       .set_server_command("sleep 30");
 
   AppShell shell(config);
@@ -625,6 +716,12 @@ int main()
   test_shell_config_defaults();
   test_shell_config_make();
   test_shell_config_setters();
+  test_shell_config_metadata();
+  test_shell_config_icon_path();
+  test_shell_config_readiness_url();
+  test_shell_config_effective_readiness_url_uses_effective_url();
+  test_shell_config_wait_for_server_flag();
+  test_shell_config_startup_timeout();
   test_shell_config_server_command();
   test_shell_config_effective_url_uses_local_url_when_no_url();
 

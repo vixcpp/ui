@@ -269,6 +269,21 @@ namespace vix::ui
     Result<void> stop_server_if_needed();
 
     /**
+     * @brief Wait for the configured local server to become reachable.
+     *
+     * The readiness check runs only when:
+     * - ShellConfig::start_server() is true
+     * - ShellConfig::wait_for_server() is true
+     * - ShellConfig::has_server_command() is true
+     *
+     * The readiness URL comes from
+     * ShellConfig::effective_readiness_url().
+     *
+     * @return Successful result if no wait is needed or the server is ready.
+     */
+    Result<void> wait_for_server_if_needed();
+
+    /**
      * @brief Create the internal backend for the current configuration.
      *
      * This is the backend selection point.

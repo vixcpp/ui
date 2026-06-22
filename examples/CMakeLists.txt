@@ -46,3 +46,21 @@ target_link_libraries(ui_example_desktop_shell_with_server
   PRIVATE
     vix::ui
 )
+
+add_executable(ui_example_forms
+  04_forms.cpp
+)
+
+target_link_libraries(ui_example_forms
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_shell_config_v04
+  05_shell_config_v04.cpp
+)
+
+target_link_libraries(ui_example_shell_config_v04
+  PRIVATE
+    vix::ui
+)

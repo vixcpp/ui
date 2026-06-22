@@ -65,5 +65,6 @@
 #include <vix/ui/shell/AppShell.hpp>
 #include <vix/ui/shell/ShellConfig.hpp>
 #include <vix/ui/shell/ServerProcess.hpp>
+#include <vix/ui/shell/ServerReadiness.hpp>
 
 #endif // VIX_UI_ALL_HPP

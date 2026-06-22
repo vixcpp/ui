@@ -21,6 +21,7 @@
 #include <cerrno>
 #include <csignal>
 #include <cstring>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -123,6 +124,13 @@ namespace vix::ui
 
     if (child == 0)
     {
+      const int null_fd = open("/dev/null", O_RDONLY);
+      if (null_fd >= 0)
+      {
+        (void)dup2(null_fd, STDIN_FILENO);
+        close(null_fd);
+      }
+
       if (!working_directory_.empty())
       {
         if (chdir(working_directory_.c_str()) != 0)
