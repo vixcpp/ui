@@ -47,9 +47,9 @@ static void test_platform_family_to_string()
 
 static void test_platform_desktop()
 {
-  Platform linux = Platform::linux();
-  Platform windows = Platform::windows();
-  Platform macos = Platform::macos();
+  Platform linux = Platform::linux_platform();
+  Platform windows = Platform::windows_platform();
+  Platform macos = Platform::macos_platform();
 
   assert(linux.known());
   assert(windows.known());
@@ -70,8 +70,8 @@ static void test_platform_desktop()
 
 static void test_platform_mobile()
 {
-  Platform android = Platform::android();
-  Platform ios = Platform::ios();
+  Platform android = Platform::android_platform();
+  Platform ios = Platform::ios_platform();
 
   assert(android.known());
   assert(ios.known());
@@ -88,7 +88,7 @@ static void test_platform_mobile()
 
 static void test_platform_web()
 {
-  Platform web = Platform::web();
+  Platform web = Platform::web_platform_descriptor();
 
   assert(web.known());
   assert(web.web_platform());
@@ -152,7 +152,7 @@ static void test_shell_config_setters()
       .set_url("http://localhost:3000")
       .set_host("0.0.0.0")
       .set_port(9090)
-      .set_platform(Platform::web())
+      .set_platform(Platform::web_platform_descriptor())
       .set_width(1280)
       .set_height(720)
       .set_resizable(false)
@@ -454,7 +454,7 @@ static void test_app_shell_restart()
 static void test_app_shell_platform()
 {
   ShellConfig config;
-  config.set_platform(Platform::web());
+  config.set_platform(Platform::web_platform_descriptor());
 
   AppShell shell(config);
 

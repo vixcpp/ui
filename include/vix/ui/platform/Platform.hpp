@@ -103,42 +103,45 @@ namespace vix::ui
      *
      * @return Web platform.
      */
-    [[nodiscard]] static Platform web() noexcept;
+    [[nodiscard]] static Platform web_platform_descriptor() noexcept;
 
     /**
      * @brief Create a Linux platform descriptor.
      *
+     * The name intentionally avoids `linux` because some toolchains expose
+     * it as a preprocessor macro.
+     *
      * @return Linux platform.
      */
-    [[nodiscard]] static Platform linux() noexcept;
+    [[nodiscard]] static Platform linux_platform() noexcept;
 
     /**
      * @brief Create a Windows platform descriptor.
      *
      * @return Windows platform.
      */
-    [[nodiscard]] static Platform windows() noexcept;
+    [[nodiscard]] static Platform windows_platform() noexcept;
 
     /**
      * @brief Create a macOS platform descriptor.
      *
      * @return macOS platform.
      */
-    [[nodiscard]] static Platform macos() noexcept;
+    [[nodiscard]] static Platform macos_platform() noexcept;
 
     /**
      * @brief Create an Android platform descriptor.
      *
      * @return Android platform.
      */
-    [[nodiscard]] static Platform android() noexcept;
+    [[nodiscard]] static Platform android_platform() noexcept;
 
     /**
      * @brief Create an iOS platform descriptor.
      *
      * @return iOS platform.
      */
-    [[nodiscard]] static Platform ios() noexcept;
+    [[nodiscard]] static Platform ios_platform() noexcept;
 
     /**
      * @brief Get the concrete platform kind.

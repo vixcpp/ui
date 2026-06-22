@@ -112,32 +112,32 @@ namespace vix::ui
 #endif
   }
 
-  Platform Platform::web() noexcept
+  Platform Platform::web_platform_descriptor() noexcept
   {
     return Platform(PlatformKind::Web);
   }
 
-  Platform Platform::linux() noexcept
+  Platform Platform::linux_platform() noexcept
   {
     return Platform(PlatformKind::Linux);
   }
 
-  Platform Platform::windows() noexcept
+  Platform Platform::windows_platform() noexcept
   {
     return Platform(PlatformKind::Windows);
   }
 
-  Platform Platform::macos() noexcept
+  Platform Platform::macos_platform() noexcept
   {
     return Platform(PlatformKind::MacOS);
   }
 
-  Platform Platform::android() noexcept
+  Platform Platform::android_platform() noexcept
   {
     return Platform(PlatformKind::Android);
   }
 
-  Platform Platform::ios() noexcept
+  Platform Platform::ios_platform() noexcept
   {
     return Platform(PlatformKind::IOS);
   }
