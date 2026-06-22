@@ -71,6 +71,7 @@ namespace vix::ui
    * Asset describes a static resource used by server-rendered UI pages:
    * - CSS stylesheets
    * - JavaScript files
+   * - JavaScript modules
    * - images
    * - fonts
    * - custom assets
@@ -115,6 +116,20 @@ namespace vix::ui
     [[nodiscard]] static Asset script(
         std::string src,
         AssetLoading loading = AssetLoading::Default);
+
+    /**
+     * @brief Create a JavaScript module asset.
+     *
+     * The rendered script tag receives:
+     *
+     * @code
+     * type="module"
+     * @endcode
+     *
+     * @param src Script module URL.
+     * @return Module script asset.
+     */
+    [[nodiscard]] static Asset module_script(std::string src);
 
     /**
      * @brief Create an image asset.
@@ -186,6 +201,22 @@ namespace vix::ui
     Asset &set_loading(AssetLoading loading) noexcept;
 
     /**
+     * @brief Set whether this script asset should render as a module script.
+     *
+     * When enabled, script assets render with:
+     *
+     * @code
+     * type="module"
+     * @endcode
+     *
+     * This flag is ignored by non-script asset types.
+     *
+     * @param value Module script flag.
+     * @return This asset.
+     */
+    Asset &set_module(bool value = true) noexcept;
+
+    /**
      * @brief Set or replace a custom HTML attribute.
      *
      * @param name Attribute name.
@@ -244,6 +275,13 @@ namespace vix::ui
      * @return Loading behavior.
      */
     [[nodiscard]] AssetLoading loading() const noexcept;
+
+    /**
+     * @brief Check whether this script asset renders as a module script.
+     *
+     * @return True if module script rendering is enabled.
+     */
+    [[nodiscard]] bool module() const noexcept;
 
     /**
      * @brief Access custom HTML attributes.
@@ -326,6 +364,11 @@ namespace vix::ui
      * @brief Script loading behavior.
      */
     AssetLoading loading_{AssetLoading::Default};
+
+    /**
+     * @brief Whether script assets should render with type="module".
+     */
+    bool module_{false};
 
     /**
      * @brief Custom HTML attributes.

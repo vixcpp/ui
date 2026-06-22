@@ -12,7 +12,7 @@ endif()
 set_property(GLOBAL PROPERTY VIX_UI_MODULE_ALREADY_INCLUDED TRUE)
 
 project(ui
-  VERSION 0.6.0
+  VERSION 0.7.0
   DESCRIPTION "Web-first UI and app shell primitives for Vix.cpp applications"
   LANGUAGES CXX
 )
@@ -137,6 +137,7 @@ set(UI_SOURCES
 
   src/assets/Asset.cpp
   src/assets/AssetManifest.cpp
+  src/assets/AssetMap.cpp
   src/assets/AssetManager.cpp
 
   src/forms/ValidationError.cpp

@@ -38,6 +38,8 @@
 #include <vix/ui/assets/Asset.hpp>
 #include <vix/ui/assets/AssetManager.hpp>
 #include <vix/ui/assets/AssetManifest.hpp>
+#include <vix/ui/assets/AssetMap.hpp>
+#include <vix/ui/assets/AssetMode.hpp>
 
 /*
  * Core views

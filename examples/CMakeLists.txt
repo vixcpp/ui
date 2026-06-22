@@ -109,3 +109,21 @@ target_link_libraries(ui_example_form_binding
   PRIVATE
     vix::ui
 )
+
+add_executable(ui_example_asset_pipeline
+  11_asset_pipeline.cpp
+)
+
+target_link_libraries(ui_example_asset_pipeline
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_asset_manifest
+  12_asset_manifest.cpp
+)
+
+target_link_libraries(ui_example_asset_manifest
+  PRIVATE
+    vix::ui
+)

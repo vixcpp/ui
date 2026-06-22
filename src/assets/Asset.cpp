@@ -88,6 +88,13 @@ namespace vix::ui
     return asset;
   }
 
+  Asset Asset::module_script(std::string src)
+  {
+    Asset asset(AssetType::Script, std::move(src));
+    asset.set_module(true);
+    return asset;
+  }
+
   Asset Asset::image(
       std::string src,
       std::string alt)
@@ -145,6 +152,12 @@ namespace vix::ui
     return *this;
   }
 
+  Asset &Asset::set_module(bool value) noexcept
+  {
+    module_ = value;
+    return *this;
+  }
+
   Asset &Asset::set_attr(std::string name, std::string value)
   {
     attrs_.set(std::move(name), std::move(value));
@@ -185,6 +198,11 @@ namespace vix::ui
   AssetLoading Asset::loading() const noexcept
   {
     return loading_;
+  }
+
+  bool Asset::module() const noexcept
+  {
+    return module_;
   }
 
   const HtmlAttrs &Asset::attrs() const noexcept
@@ -251,6 +269,11 @@ namespace vix::ui
 
     case AssetType::Script:
       attrs.set("src", url_);
+
+      if (module_)
+      {
+        attrs.set("type", "module");
+      }
 
       if (loading_ == AssetLoading::Deferred)
       {
