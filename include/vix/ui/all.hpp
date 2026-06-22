@@ -50,8 +50,11 @@
 /*
  * Forms
  */
+#include <vix/ui/forms/CsrfToken.hpp>
 #include <vix/ui/forms/Field.hpp>
+#include <vix/ui/forms/FieldOption.hpp>
 #include <vix/ui/forms/Form.hpp>
+#include <vix/ui/forms/FormData.hpp>
 #include <vix/ui/forms/ValidationError.hpp>
 
 /*

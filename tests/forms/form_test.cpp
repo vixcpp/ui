@@ -1,23 +1,26 @@
 /**
- *
- *  @file form_test.cpp
- *  @author Gaspard Kirira
- *
- *  Copyright 2025, Gaspard Kirira.
- *  All rights reserved.
- *  https://github.com/vixcpp/vix
- *
- *  Use of this source code is governed by a MIT license
- *  that can be found in the License file.
- *
- *  Vix.cpp
- *
- */
+*
+* @file form_test.cpp
+* @author Gaspard Kirira
+*
+* Copyright 2025, Gaspard Kirira.
+* All rights reserved.
+* https://github.com/vixcpp/vix
+*
+* Use of this source code is governed by a MIT license
+* that can be found in the License file.
+*
+* Vix.cpp
+*
+
+*/
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include <vix/ui/forms/Field.hpp>
+#include <vix/ui/forms/FieldOption.hpp>
 #include <vix/ui/forms/Form.hpp>
 #include <vix/ui/forms/ValidationError.hpp>
 #include <vix/ui/support/Error.hpp>
@@ -88,7 +91,54 @@ static void test_text_field()
   assert(field.value() == "gaspard");
   assert(field.placeholder() == "Enter username");
   assert(field.required());
+  assert(!field.disabled());
+  assert(!field.readonly());
+  assert(!field.checked());
+  assert(!field.multiple());
+  assert(field.accept().empty());
   assert(field.valid());
+}
+
+static void test_number_field_factory()
+{
+  Field field = Field::number("quantity");
+
+  field.set_value("42");
+
+  assert(field.name() == "quantity");
+  assert(field.type() == FieldType::Number);
+  assert(field.value() == "42");
+
+  assert(
+      field.render() ==
+      R"(<input id="quantity" name="quantity" type="number" value="42">)");
+}
+
+static void test_radio_field_factory()
+{
+  Field field = Field::radio("role");
+
+  field.set_value("admin");
+
+  assert(field.name() == "role");
+  assert(field.type() == FieldType::Radio);
+  assert(field.value() == "admin");
+}
+
+static void test_select_field_factory()
+{
+  Field field = Field::select("country");
+
+  assert(field.name() == "country");
+  assert(field.type() == FieldType::Select);
+}
+
+static void test_file_field_factory()
+{
+  Field field = Field::file("avatar");
+
+  assert(field.name() == "avatar");
+  assert(field.type() == FieldType::File);
 }
 
 static void test_email_field_render()
@@ -98,9 +148,14 @@ static void test_email_field_render()
   field.set_value("hello@example.com");
   field.set_required();
 
-  assert(
-      field.render() ==
-      R"(<input id="email" name="email" required type="email" value="hello@example.com">)");
+  const std::string rendered = field.render();
+
+  assert(rendered.find("<input") != std::string::npos);
+  assert(rendered.find(R"(id="email")") != std::string::npos);
+  assert(rendered.find(R"(name="email")") != std::string::npos);
+  assert(rendered.find("required") != std::string::npos);
+  assert(rendered.find(R"(type="email")") != std::string::npos);
+  assert(rendered.find(R"(value="hello@example.com")") != std::string::npos);
 }
 
 static void test_password_field_render()
@@ -112,6 +167,17 @@ static void test_password_field_render()
   assert(
       field.render() ==
       R"(<input id="password" name="password" placeholder="Password" type="password">)");
+}
+
+static void test_password_field_does_not_render_value()
+{
+  Field field = Field::password("password");
+
+  field.set_value("secret");
+
+  assert(
+      field.render() ==
+      R"(<input id="password" name="password" type="password">)");
 }
 
 static void test_hidden_field_render()
@@ -135,15 +201,271 @@ static void test_textarea_field_render()
       R"(<textarea id="bio" name="bio" placeholder="Your bio">&lt;builder&gt;</textarea>)");
 }
 
-static void test_checkbox_field_render()
+static void test_checkbox_field_render_unchecked()
 {
   Field field = Field::checkbox("remember");
 
-  field.set_bool_attr("checked", true);
+  assert(
+      field.render() ==
+      R"(<input id="remember" name="remember" type="checkbox" value="">)");
+}
+
+static void test_checkbox_field_render_checked()
+{
+  Field field = Field::checkbox("remember");
+
+  field.set_checked(true);
+
+  assert(field.checked());
 
   assert(
       field.render() ==
       R"(<input checked id="remember" name="remember" type="checkbox" value="">)");
+}
+
+static void test_checkbox_checked_can_be_disabled()
+{
+  Field field = Field::checkbox("remember");
+
+  field.set_checked(true);
+  assert(field.checked());
+
+  field.set_checked(false);
+  assert(!field.checked());
+
+  assert(
+      field.render() ==
+      R"(<input id="remember" name="remember" type="checkbox" value="">)");
+}
+
+static void test_file_field_render()
+{
+  Field field = Field::file("avatar");
+
+  assert(
+      field.render() ==
+      R"(<input id="avatar" name="avatar" type="file">)");
+}
+
+static void test_file_field_render_with_accept()
+{
+  Field field = Field::file("avatar");
+
+  field.set_accept("image/png,image/jpeg");
+
+  assert(field.has_accept());
+  assert(field.accept() == "image/png,image/jpeg");
+
+  assert(
+      field.render() ==
+      R"(<input accept="image/png,image/jpeg" id="avatar" name="avatar" type="file">)");
+}
+
+static void test_file_field_render_multiple()
+{
+  Field field = Field::file("photos");
+
+  field.set_multiple(true);
+
+  assert(field.multiple());
+
+  assert(
+      field.render() ==
+      R"(<input id="photos" multiple name="photos" type="file">)");
+}
+
+static void test_file_field_does_not_render_value()
+{
+  Field field = Field::file("avatar");
+
+  field.set_value("avatar.png");
+
+  assert(
+      field.render() ==
+      R"(<input id="avatar" name="avatar" type="file">)");
+}
+
+static void test_select_field_options()
+{
+  Field field = Field::select("country");
+
+  field.add_option("ug", "Uganda");
+  field.add_option("cd", "DRC");
+  field.add_option("rw", "Rwanda");
+
+  assert(field.has_options());
+  assert(field.option_count() == 3);
+  assert(field.options()[0].value() == "ug");
+  assert(field.options()[1].label() == "DRC");
+}
+
+static void test_select_field_render()
+{
+  Field field = Field::select("country");
+
+  field.add_option("ug", "Uganda");
+  field.add_option("cd", "DRC");
+
+  assert(
+      field.render() ==
+      R"(<select id="country" name="country"><option value="ug">Uganda</option><option value="cd">DRC</option></select>)");
+}
+
+static void test_select_field_render_selected_from_value()
+{
+  Field field = Field::select("country");
+
+  field.set_value("cd");
+  field.add_option("ug", "Uganda");
+  field.add_option("cd", "DRC");
+
+  assert(
+      field.render() ==
+      R"(<select id="country" name="country"><option value="ug">Uganda</option><option selected value="cd">DRC</option></select>)");
+}
+
+static void test_select_field_render_explicit_selected_option()
+{
+  Field field = Field::select("country");
+
+  field.add_option("ug", "Uganda");
+  field.add_option(FieldOption::make("cd", "DRC").set_selected(true));
+
+  assert(
+      field.render() ==
+      R"(<select id="country" name="country"><option value="ug">Uganda</option><option selected value="cd">DRC</option></select>)");
+}
+
+static void test_select_field_render_multiple()
+{
+  Field field = Field::select("countries");
+
+  field.set_multiple(true);
+  field.add_option("ug", "Uganda");
+  field.add_option("cd", "DRC");
+
+  assert(
+      field.render() ==
+      R"(<select id="countries" multiple name="countries"><option value="ug">Uganda</option><option value="cd">DRC</option></select>)");
+}
+
+static void test_select_field_set_options()
+{
+  Field field = Field::select("country");
+
+  std::vector<FieldOption> options;
+  options.push_back(FieldOption::make("ug", "Uganda"));
+  options.push_back(FieldOption::make("cd", "DRC"));
+
+  field.set_options(options);
+
+  assert(field.has_options());
+  assert(field.option_count() == 2);
+
+  assert(
+      field.render() ==
+      R"(<select id="country" name="country"><option value="ug">Uganda</option><option value="cd">DRC</option></select>)");
+}
+
+static void test_select_field_clear_options()
+{
+  Field field = Field::select("country");
+
+  field.add_option("ug", "Uganda");
+  field.add_option("cd", "DRC");
+
+  assert(field.option_count() == 2);
+
+  field.clear_options();
+
+  assert(!field.has_options());
+  assert(field.option_count() == 0);
+
+  assert(field.render() == R"(<select id="country" name="country"></select>)");
+}
+
+static void test_radio_input_render_without_options()
+{
+  Field field = Field::radio("role");
+
+  field.set_value("admin");
+  field.set_checked(true);
+
+  assert(
+      field.render() ==
+      R"(<input checked id="role" name="role" type="radio" value="admin">)");
+}
+
+static void test_radio_group_render()
+{
+  Field field = Field::radio("role");
+
+  field.add_option("admin", "Admin");
+  field.add_option("editor", "Editor");
+
+  assert(
+      field.render() ==
+      R"(<div class="radio-group" data-field="role"><div class="radio-option"><input id="role_admin" name="role" type="radio" value="admin"><label for="role_admin">Admin</label></div><div class="radio-option"><input id="role_editor" name="role" type="radio" value="editor"><label for="role_editor">Editor</label></div></div>)");
+}
+
+static void test_radio_group_selected_from_value()
+{
+  Field field = Field::radio("role");
+
+  field.set_value("editor");
+  field.add_option("admin", "Admin");
+  field.add_option("editor", "Editor");
+
+  assert(
+      field.render() ==
+      R"(<div class="radio-group" data-field="role"><div class="radio-option"><input id="role_admin" name="role" type="radio" value="admin"><label for="role_admin">Admin</label></div><div class="radio-option"><input checked id="role_editor" name="role" type="radio" value="editor"><label for="role_editor">Editor</label></div></div>)");
+}
+
+static void test_radio_group_selected_from_option()
+{
+  Field field = Field::radio("role");
+
+  field.add_option("admin", "Admin");
+  field.add_option(FieldOption::make("editor", "Editor").set_selected(true));
+
+  assert(
+      field.render() ==
+      R"(<div class="radio-group" data-field="role"><div class="radio-option"><input id="role_admin" name="role" type="radio" value="admin"><label for="role_admin">Admin</label></div><div class="radio-option"><input checked id="role_editor" name="role" type="radio" value="editor"><label for="role_editor">Editor</label></div></div>)");
+}
+
+static void test_radio_group_disabled_option()
+{
+  Field field = Field::radio("role");
+
+  field.add_option("admin", "Admin");
+  field.add_option(FieldOption::make("editor", "Editor").set_disabled(true));
+
+  assert(
+      field.render() ==
+      R"(<div class="radio-group" data-field="role"><div class="radio-option"><input id="role_admin" name="role" type="radio" value="admin"><label for="role_admin">Admin</label></div><div class="radio-option"><input disabled id="role_editor" name="role" type="radio" value="editor"><label for="role_editor">Editor</label></div></div>)");
+}
+
+static void test_radio_group_required()
+{
+  Field field = Field::radio("role");
+
+  field.set_required(true);
+  field.add_option("admin", "Admin");
+
+  assert(
+      field.render() ==
+      R"(<div class="radio-group" data-field="role"><div class="radio-option"><input id="role_admin" name="role" required type="radio" value="admin"><label for="role_admin">Admin</label></div></div>)");
+}
+
+static void test_radio_group_safe_option_id()
+{
+  Field field = Field::radio("plan");
+
+  field.add_option("pro plan", "Pro Plan");
+
+  assert(
+      field.render() ==
+      R"(<div class="radio-group" data-field="plan"><div class="radio-option"><input id="plan_pro_plan" name="plan" type="radio" value="pro plan"><label for="plan_pro_plan">Pro Plan</label></div></div>)");
 }
 
 static void test_field_errors()
@@ -236,7 +558,7 @@ static void test_form_replace_field()
   form.add_text("name");
 
   Field replacement = Field::email("name");
-  replacement.set_value("hello@example.com");
+  replacement.set_value("[hello@example.com](mailto:hello@example.com)");
 
   form.add_field(replacement);
 
@@ -246,7 +568,7 @@ static void test_form_replace_field()
 
   assert(field != nullptr);
   assert(field->type() == FieldType::Email);
-  assert(field->value() == "hello@example.com");
+  assert(field->value() == "[hello@example.com](mailto:hello@example.com)");
 }
 
 static void test_form_remove_field()
@@ -356,12 +678,44 @@ int main()
   test_validation_error_custom();
 
   test_field_type_to_string();
+
   test_text_field();
+  test_number_field_factory();
+  test_radio_field_factory();
+  test_select_field_factory();
+  test_file_field_factory();
+
   test_email_field_render();
   test_password_field_render();
+  test_password_field_does_not_render_value();
   test_hidden_field_render();
   test_textarea_field_render();
-  test_checkbox_field_render();
+
+  test_checkbox_field_render_unchecked();
+  test_checkbox_field_render_checked();
+  test_checkbox_checked_can_be_disabled();
+
+  test_file_field_render();
+  test_file_field_render_with_accept();
+  test_file_field_render_multiple();
+  test_file_field_does_not_render_value();
+
+  test_select_field_options();
+  test_select_field_render();
+  test_select_field_render_selected_from_value();
+  test_select_field_render_explicit_selected_option();
+  test_select_field_render_multiple();
+  test_select_field_set_options();
+  test_select_field_clear_options();
+
+  test_radio_input_render_without_options();
+  test_radio_group_render();
+  test_radio_group_selected_from_value();
+  test_radio_group_selected_from_option();
+  test_radio_group_disabled_option();
+  test_radio_group_required();
+  test_radio_group_safe_option_id();
+
   test_field_errors();
   test_custom_field_render_throws();
 

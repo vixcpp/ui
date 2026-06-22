@@ -22,6 +22,8 @@
 #include <vector>
 
 #include <vix/ui/forms/Field.hpp>
+#include <vix/ui/forms/CsrfToken.hpp>
+#include <vix/ui/forms/FormData.hpp>
 #include <vix/ui/forms/ValidationError.hpp>
 #include <vix/ui/html/HtmlAttrs.hpp>
 
@@ -137,6 +139,48 @@ namespace vix::ui
     Form &set_bool_attr(std::string name, bool enabled = true);
 
     /**
+     * @brief Bind old/submitted input values to the form fields.
+     *
+     * @param data Form data.
+     * @return This form.
+     */
+    Form &bind(FormData data);
+
+    /**
+     * @brief Set stored form data without applying it to fields.
+     *
+     * @param data Form data.
+     * @return This form.
+     */
+    Form &set_data(FormData data);
+
+    /**
+     * @brief Remove stored form data.
+     */
+    void clear_data() noexcept;
+
+    /**
+     * @brief Set the CSRF token rendered by the form.
+     *
+     * @param token CSRF token.
+     * @return This form.
+     */
+    Form &set_csrf(CsrfToken token);
+
+    /**
+     * @brief Set the CSRF token value using the default token name.
+     *
+     * @param value CSRF token value.
+     * @return This form.
+     */
+    Form &set_csrf(std::string value);
+
+    /**
+     * @brief Remove the CSRF token from the form.
+     */
+    void clear_csrf() noexcept;
+
+    /**
      * @brief Add a field to the form.
      *
      * If a field with the same name already exists, it is replaced.
@@ -171,6 +215,14 @@ namespace vix::ui
     Form &add_password(std::string name);
 
     /**
+     * @brief Add a number field.
+     *
+     * @param name Field name.
+     * @return This form.
+     */
+    Form &add_number(std::string name);
+
+    /**
      * @brief Add a hidden field.
      *
      * @param name Field name.
@@ -188,12 +240,36 @@ namespace vix::ui
     Form &add_checkbox(std::string name);
 
     /**
+     * @brief Add a radio field.
+     *
+     * @param name Field name.
+     * @return This form.
+     */
+    Form &add_radio(std::string name);
+
+    /**
      * @brief Add a textarea field.
      *
      * @param name Field name.
      * @return This form.
      */
     Form &add_textarea(std::string name);
+
+    /**
+     * @brief Add a select field.
+     *
+     * @param name Field name.
+     * @return This form.
+     */
+    Form &add_select(std::string name);
+
+    /**
+     * @brief Add a file field.
+     *
+     * @param name Field name.
+     * @return This form.
+     */
+    Form &add_file(std::string name);
 
     /**
      * @brief Check whether a field exists.
@@ -283,6 +359,27 @@ namespace vix::ui
     [[nodiscard]] HtmlAttrs &attrs() noexcept;
 
     /**
+     * @brief Access bound form data.
+     *
+     * @return Immutable form data.
+     */
+    [[nodiscard]] const FormData &data() const noexcept;
+
+    /**
+     * @brief Access bound form data.
+     *
+     * @return Mutable form data.
+     */
+    [[nodiscard]] FormData &data() noexcept;
+
+    /**
+     * @brief Access the configured CSRF token.
+     *
+     * @return CSRF token.
+     */
+    [[nodiscard]] const CsrfToken &csrf() const noexcept;
+
+    /**
      * @brief Access form fields.
      *
      * @return Immutable field list.
@@ -323,6 +420,20 @@ namespace vix::ui
      * @return True if errors are present.
      */
     [[nodiscard]] bool has_errors() const noexcept;
+
+    /**
+     * @brief Check whether the form has bound data.
+     *
+     * @return True if form data is not empty.
+     */
+    [[nodiscard]] bool has_data() const noexcept;
+
+    /**
+     * @brief Check whether the form has a CSRF token.
+     *
+     * @return True if CSRF token is enabled.
+     */
+    [[nodiscard]] bool has_csrf() const noexcept;
 
     /**
      * @brief Check whether the form has no fields.
@@ -388,6 +499,20 @@ namespace vix::ui
     [[nodiscard]] std::string render_errors() const;
 
     /**
+     * @brief Render a form-level error summary.
+     *
+     * @return Rendered error summary.
+     */
+    [[nodiscard]] std::string render_error_summary() const;
+
+    /**
+     * @brief Render the CSRF hidden input if configured.
+     *
+     * @return Rendered CSRF field or empty string.
+     */
+    [[nodiscard]] std::string render_csrf() const;
+
+    /**
      * @brief Render the full form.
      *
      * @return Rendered HTML form.
@@ -409,6 +534,21 @@ namespace vix::ui
      * @brief Custom HTML attributes.
      */
     HtmlAttrs attrs_;
+
+    /**
+     * @brief Bound form data used for old input values.
+     */
+    FormData data_;
+
+    /**
+     * @brief CSRF token rendered as hidden input when enabled.
+     */
+    CsrfToken csrf_;
+
+    /**
+     * @brief Whether the form should render a CSRF token.
+     */
+    bool has_csrf_{false};
 
     /**
      * @brief Form fields in insertion order.

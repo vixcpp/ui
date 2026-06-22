@@ -38,11 +38,125 @@ namespace vix::ui
         attrs.set("placeholder", field.placeholder());
       }
 
-      attrs.boolean("required", field.required());
-      attrs.boolean("disabled", field.disabled());
-      attrs.boolean("readonly", field.readonly());
+      if (field.required())
+      {
+        attrs.boolean("required", true);
+      }
+
+      if (field.disabled())
+      {
+        attrs.boolean("disabled", true);
+      }
+
+      if (field.readonly())
+      {
+        attrs.boolean("readonly", true);
+      }
 
       return attrs;
+    }
+
+    std::string render_options(const Field &field)
+    {
+      std::string output;
+
+      for (const auto &option : field.options())
+      {
+        FieldOption current = option;
+
+        if (!current.selected() &&
+            field.has_value() &&
+            current.value() == field.value())
+        {
+          current.set_selected(true);
+        }
+
+        output += current.render();
+      }
+
+      return output;
+    }
+
+    std::string safe_option_id(
+        std::string_view field_name,
+        std::string_view option_value)
+    {
+      std::string output;
+
+      output.reserve(field_name.size() + option_value.size() + 2);
+
+      output.append(field_name.data(), field_name.size());
+      output.push_back('_');
+
+      for (char ch : option_value)
+      {
+        if ((ch >= 'a' && ch <= 'z') ||
+            (ch >= 'A' && ch <= 'Z') ||
+            (ch >= '0' && ch <= '9') ||
+            ch == '_' ||
+            ch == '-')
+        {
+          output.push_back(ch);
+        }
+        else
+        {
+          output.push_back('_');
+        }
+      }
+
+      return output;
+    }
+
+    std::string render_radio_group(const Field &field)
+    {
+      std::string output;
+
+      for (const auto &option : field.options())
+      {
+        HtmlAttrs input_attrs = option.attrs();
+
+        input_attrs.set("type", "radio");
+        input_attrs.set("name", field.name());
+        input_attrs.set("value", option.value());
+
+        const std::string id = safe_option_id(field.name(), option.value());
+        input_attrs.set("id", id);
+
+        const bool selected =
+            option.selected() ||
+            (field.has_value() && option.value() == field.value());
+
+        input_attrs.boolean("checked", selected);
+        input_attrs.boolean("disabled", option.disabled() || field.disabled());
+        input_attrs.boolean("required", field.required());
+
+        std::string content;
+
+        content += Html::void_tag("input", input_attrs);
+
+        HtmlAttrs label_attrs;
+        label_attrs.set("for", id);
+
+        content += Html::tag(
+            "label",
+            Html::text(option.display_label()),
+            label_attrs);
+
+        HtmlAttrs wrapper_attrs;
+        wrapper_attrs.set("class", "radio-option");
+
+        output += Html::tag("div", content, wrapper_attrs);
+      }
+
+      HtmlAttrs group_attrs;
+      group_attrs.set("class", "radio-group");
+
+      if (field.has_name())
+      {
+        group_attrs.set("data-field", field.name());
+      }
+
+      return Html::tag("div", output, group_attrs);
     }
   } // namespace
 
@@ -110,6 +224,11 @@ namespace vix::ui
     return Field(std::move(name), FieldType::Password);
   }
 
+  Field Field::number(std::string name)
+  {
+    return Field(std::move(name), FieldType::Number);
+  }
+
   Field Field::hidden(
       std::string name,
       std::string value)
@@ -124,9 +243,24 @@ namespace vix::ui
     return Field(std::move(name), FieldType::Checkbox);
   }
 
+  Field Field::radio(std::string name)
+  {
+    return Field(std::move(name), FieldType::Radio);
+  }
+
   Field Field::textarea(std::string name)
   {
     return Field(std::move(name), FieldType::Textarea);
+  }
+
+  Field Field::select(std::string name)
+  {
+    return Field(std::move(name), FieldType::Select);
+  }
+
+  Field Field::file(std::string name)
+  {
+    return Field(std::move(name), FieldType::File);
   }
 
   Field &Field::set_name(std::string name)
@@ -177,6 +311,24 @@ namespace vix::ui
     return *this;
   }
 
+  Field &Field::set_checked(bool checked) noexcept
+  {
+    checked_ = checked;
+    return *this;
+  }
+
+  Field &Field::set_multiple(bool multiple) noexcept
+  {
+    multiple_ = multiple;
+    return *this;
+  }
+
+  Field &Field::set_accept(std::string accept)
+  {
+    accept_ = std::move(accept);
+    return *this;
+  }
+
   Field &Field::set_attr(std::string name, std::string value)
   {
     attrs_.set(std::move(name), std::move(value));
@@ -187,6 +339,31 @@ namespace vix::ui
   {
     attrs_.boolean(std::move(name), enabled);
     return *this;
+  }
+
+  Field &Field::add_option(FieldOption option)
+  {
+    options_.push_back(std::move(option));
+    return *this;
+  }
+
+  Field &Field::add_option(std::string value, std::string label)
+  {
+    options_.push_back(
+        FieldOption::make(std::move(value), std::move(label)));
+
+    return *this;
+  }
+
+  Field &Field::set_options(std::vector<FieldOption> options)
+  {
+    options_ = std::move(options);
+    return *this;
+  }
+
+  void Field::clear_options() noexcept
+  {
+    options_.clear();
   }
 
   Field &Field::add_error(ValidationError error)
@@ -248,6 +425,21 @@ namespace vix::ui
     return readonly_;
   }
 
+  bool Field::checked() const noexcept
+  {
+    return checked_;
+  }
+
+  bool Field::multiple() const noexcept
+  {
+    return multiple_;
+  }
+
+  const std::string &Field::accept() const noexcept
+  {
+    return accept_;
+  }
+
   const HtmlAttrs &Field::attrs() const noexcept
   {
     return attrs_;
@@ -256,6 +448,16 @@ namespace vix::ui
   HtmlAttrs &Field::attrs() noexcept
   {
     return attrs_;
+  }
+
+  const std::vector<FieldOption> &Field::options() const noexcept
+  {
+    return options_;
+  }
+
+  std::vector<FieldOption> &Field::options() noexcept
+  {
+    return options_;
   }
 
   const std::vector<ValidationError> &Field::errors() const noexcept
@@ -283,6 +485,16 @@ namespace vix::ui
     return !placeholder_.empty();
   }
 
+  bool Field::has_accept() const noexcept
+  {
+    return !accept_.empty();
+  }
+
+  bool Field::has_options() const noexcept
+  {
+    return !options_.empty();
+  }
+
   bool Field::has_errors() const noexcept
   {
     return !errors_.empty();
@@ -296,6 +508,11 @@ namespace vix::ui
   bool Field::invalid() const noexcept
   {
     return !valid();
+  }
+
+  std::size_t Field::option_count() const noexcept
+  {
+    return options_.size();
   }
 
   std::size_t Field::error_count() const noexcept
@@ -312,15 +529,44 @@ namespace vix::ui
     case FieldType::Textarea:
       return Html::tag("textarea", Html::text(value_), attrs);
 
+    case FieldType::Select:
+      attrs.boolean("multiple", multiple_);
+      return Html::tag("select", render_options(*this), attrs);
+
+    case FieldType::Radio:
+      if (has_options())
+      {
+        return render_radio_group(*this);
+      }
+
+      attrs.set("type", std::string(to_string(type_)));
+      attrs.set("value", value_);
+      attrs.boolean("checked", checked_);
+      return Html::void_tag("input", attrs);
+
     case FieldType::Text:
     case FieldType::Email:
     case FieldType::Password:
     case FieldType::Number:
     case FieldType::Hidden:
     case FieldType::Checkbox:
-    case FieldType::Radio:
     case FieldType::File:
       attrs.set("type", std::string(to_string(type_)));
+
+      if (type_ == FieldType::Checkbox)
+      {
+        attrs.boolean("checked", checked_);
+      }
+
+      if (type_ == FieldType::File)
+      {
+        attrs.boolean("multiple", multiple_);
+
+        if (has_accept())
+        {
+          attrs.set("accept", accept_);
+        }
+      }
 
       if (type_ != FieldType::File &&
           type_ != FieldType::Password)
@@ -329,9 +575,6 @@ namespace vix::ui
       }
 
       return Html::void_tag("input", attrs);
-
-    case FieldType::Select:
-      return Html::tag("select", "", attrs);
 
     case FieldType::Custom:
       break;

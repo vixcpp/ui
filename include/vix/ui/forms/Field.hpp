@@ -21,6 +21,7 @@
 #include <string_view>
 #include <vector>
 
+#include <vix/ui/forms/FieldOption.hpp>
 #include <vix/ui/forms/ValidationError.hpp>
 #include <vix/ui/html/HtmlAttrs.hpp>
 
@@ -56,8 +57,14 @@ namespace vix::ui
    * @brief UI form field descriptor.
    *
    * Field stores the data and validation state for a single form input.
-   * It is designed for server-rendered forms and can be rendered into
-   * simple HTML when needed.
+   * It is designed for server-rendered forms and can render basic HTML.
+   *
+   * v0.6.0 extends Field with:
+   * - select options
+   * - radio option groups
+   * - checkbox checked state
+   * - multiple select/file support
+   * - file accept helper
    */
   class Field
   {
@@ -102,6 +109,14 @@ namespace vix::ui
     [[nodiscard]] static Field password(std::string name);
 
     /**
+     * @brief Create a number field.
+     *
+     * @param name Field name.
+     * @return Number field.
+     */
+    [[nodiscard]] static Field number(std::string name);
+
+    /**
      * @brief Create a hidden field.
      *
      * @param name Field name.
@@ -121,12 +136,36 @@ namespace vix::ui
     [[nodiscard]] static Field checkbox(std::string name);
 
     /**
+     * @brief Create a radio field.
+     *
+     * @param name Field name.
+     * @return Radio field.
+     */
+    [[nodiscard]] static Field radio(std::string name);
+
+    /**
      * @brief Create a textarea field.
      *
      * @param name Field name.
      * @return Textarea field.
      */
     [[nodiscard]] static Field textarea(std::string name);
+
+    /**
+     * @brief Create a select field.
+     *
+     * @param name Field name.
+     * @return Select field.
+     */
+    [[nodiscard]] static Field select(std::string name);
+
+    /**
+     * @brief Create a file field.
+     *
+     * @param name Field name.
+     * @return File field.
+     */
+    [[nodiscard]] static Field file(std::string name);
 
     /**
      * @brief Set the field name.
@@ -193,6 +232,32 @@ namespace vix::ui
     Field &set_readonly(bool readonly = true) noexcept;
 
     /**
+     * @brief Set whether checkbox/radio field is checked.
+     *
+     * @param checked Checked flag.
+     * @return This field.
+     */
+    Field &set_checked(bool checked = true) noexcept;
+
+    /**
+     * @brief Set whether select/file field accepts multiple values.
+     *
+     * @param multiple Multiple flag.
+     * @return This field.
+     */
+    Field &set_multiple(bool multiple = true) noexcept;
+
+    /**
+     * @brief Set file accept attribute.
+     *
+     * Primarily used for file inputs.
+     *
+     * @param accept Accept value.
+     * @return This field.
+     */
+    Field &set_accept(std::string accept);
+
+    /**
      * @brief Set or replace a custom HTML attribute.
      *
      * @param name Attribute name.
@@ -209,6 +274,36 @@ namespace vix::ui
      * @return This field.
      */
     Field &set_bool_attr(std::string name, bool enabled = true);
+
+    /**
+     * @brief Add a selectable option.
+     *
+     * @param option Field option.
+     * @return This field.
+     */
+    Field &add_option(FieldOption option);
+
+    /**
+     * @brief Add a selectable option from value and label.
+     *
+     * @param value Option value.
+     * @param label Option label.
+     * @return This field.
+     */
+    Field &add_option(std::string value, std::string label = {});
+
+    /**
+     * @brief Replace all field options.
+     *
+     * @param options New options.
+     * @return This field.
+     */
+    Field &set_options(std::vector<FieldOption> options);
+
+    /**
+     * @brief Remove all field options.
+     */
+    void clear_options() noexcept;
 
     /**
      * @brief Add a validation error.
@@ -288,6 +383,27 @@ namespace vix::ui
     [[nodiscard]] bool readonly() const noexcept;
 
     /**
+     * @brief Check whether the field is checked.
+     *
+     * @return True if checked.
+     */
+    [[nodiscard]] bool checked() const noexcept;
+
+    /**
+     * @brief Check whether the field accepts multiple values.
+     *
+     * @return True if multiple.
+     */
+    [[nodiscard]] bool multiple() const noexcept;
+
+    /**
+     * @brief Get the file accept value.
+     *
+     * @return Accept value.
+     */
+    [[nodiscard]] const std::string &accept() const noexcept;
+
+    /**
      * @brief Access custom HTML attributes.
      *
      * @return Immutable attributes.
@@ -300,6 +416,20 @@ namespace vix::ui
      * @return Mutable attributes.
      */
     [[nodiscard]] HtmlAttrs &attrs() noexcept;
+
+    /**
+     * @brief Access selectable options.
+     *
+     * @return Immutable options.
+     */
+    [[nodiscard]] const std::vector<FieldOption> &options() const noexcept;
+
+    /**
+     * @brief Access selectable options.
+     *
+     * @return Mutable options.
+     */
+    [[nodiscard]] std::vector<FieldOption> &options() noexcept;
 
     /**
      * @brief Access validation errors.
@@ -337,6 +467,20 @@ namespace vix::ui
     [[nodiscard]] bool has_placeholder() const noexcept;
 
     /**
+     * @brief Check whether the field has an accept value.
+     *
+     * @return True if accept is not empty.
+     */
+    [[nodiscard]] bool has_accept() const noexcept;
+
+    /**
+     * @brief Check whether the field has selectable options.
+     *
+     * @return True if options are present.
+     */
+    [[nodiscard]] bool has_options() const noexcept;
+
+    /**
      * @brief Check whether the field has validation errors.
      *
      * @return True if errors are present.
@@ -358,6 +502,13 @@ namespace vix::ui
     [[nodiscard]] bool invalid() const noexcept;
 
     /**
+     * @brief Get the number of selectable options.
+     *
+     * @return Option count.
+     */
+    [[nodiscard]] std::size_t option_count() const noexcept;
+
+    /**
      * @brief Get the number of validation errors.
      *
      * @return Error count.
@@ -365,7 +516,7 @@ namespace vix::ui
     [[nodiscard]] std::size_t error_count() const noexcept;
 
     /**
-     * @brief Render the field as a basic HTML input.
+     * @brief Render the field as basic HTML.
      *
      * @return Rendered HTML field.
      *
@@ -400,6 +551,11 @@ namespace vix::ui
     std::string placeholder_;
 
     /**
+     * @brief File accept value.
+     */
+    std::string accept_;
+
+    /**
      * @brief Required flag.
      */
     bool required_{false};
@@ -415,9 +571,24 @@ namespace vix::ui
     bool readonly_{false};
 
     /**
+     * @brief Checked flag for checkbox/radio fields.
+     */
+    bool checked_{false};
+
+    /**
+     * @brief Multiple flag for select/file fields.
+     */
+    bool multiple_{false};
+
+    /**
      * @brief Custom HTML attributes.
      */
     HtmlAttrs attrs_;
+
+    /**
+     * @brief Selectable options for select/radio fields.
+     */
+    std::vector<FieldOption> options_;
 
     /**
      * @brief Validation errors.

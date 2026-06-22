@@ -3,7 +3,7 @@
 Web-first UI and app shell primitives for Vix.cpp applications.
 
 `vix::ui` is a small UI foundation layer built on top of the Vix template engine.
-It helps Vix.cpp applications describe views, render HTML responses, manage assets, build forms, create live UI fragments, and run server-rendered interfaces inside app shells.
+It helps Vix.cpp applications describe views, render HTML responses, manage assets, build practical server-rendered forms, create live UI fragments, and run server-rendered interfaces inside app shells.
 
 It is not a replacement for `vix::template_`.
 It is a higher-level layer that makes template-based web UI development cleaner.
@@ -13,7 +13,7 @@ It is a higher-level layer that makes template-based web UI development cleaner.
 Current module version:
 
 ```txt
-0.5.0
+0.6.0
 ```
 
 ## Goals
@@ -26,7 +26,7 @@ Vix UI follows a simple direction:
 - support server-rendered UI first
 - avoid a heavy frontend framework
 - prepare desktop/mobile shells through WebView containers
-- make dashboards, admin panels and internal tools easier to build
+- make dashboards, admin panels, forms, and internal tools easier to build
 
 The first target is server-rendered web UI.
 
@@ -47,7 +47,10 @@ Current primitives:
 - `vix::ui::AssetManifest`
 - `vix::ui::AssetManager`
 - `vix::ui::Field`
+- `vix::ui::FieldOption`
 - `vix::ui::Form`
+- `vix::ui::FormData`
+- `vix::ui::CsrfToken`
 - `vix::ui::ValidationError`
 - `vix::ui::Fragment`
 - `vix::ui::LiveUpdate`
@@ -181,6 +184,133 @@ Validation errors can be attached to the form and to individual fields:
 form.add_error("email", "Email is required.");
 ```
 
+## Rich forms
+
+Vix UI forms support richer server-rendered fields:
+
+- text
+- email
+- password
+- number
+- hidden
+- checkbox
+- radio
+- textarea
+- select
+- file
+
+```cpp
+#include <vix/ui/forms/Form.hpp>
+
+vix::ui::Form form = vix::ui::Form::post("/products/create");
+
+form.set_csrf("csrf-demo-token");
+
+form.add_field(
+    vix::ui::Field::text("title")
+        .set_label("Product title")
+        .set_required(true));
+
+form.add_field(
+    vix::ui::Field::number("price")
+        .set_label("Price")
+        .set_attr("min", "0")
+        .set_attr("step", "0.01"));
+
+vix::ui::Field condition = vix::ui::Field::select("condition")
+                               .set_label("Condition")
+                               .set_required(true);
+
+condition.add_option("", "Choose condition");
+condition.add_option("new", "New");
+condition.add_option("used", "Used");
+condition.add_option("refurbished", "Refurbished");
+
+form.add_field(condition);
+
+form.add_field(
+    vix::ui::Field::file("images")
+        .set_label("Product images")
+        .set_accept("image/png,image/jpeg,image/webp")
+        .set_multiple(true));
+
+std::string html = form.render();
+```
+
+When a file field is present, the form automatically renders:
+
+```html
+enctype="multipart/form-data"
+```
+
+## Form data binding
+
+`FormData` stores old input values or submitted values and can bind them back to a form.
+
+This is useful after validation fails, so users do not lose their input.
+
+```cpp
+#include <vix/ui/forms/Form.hpp>
+#include <vix/ui/forms/FormData.hpp>
+
+vix::ui::FormData old_input;
+
+old_input.set("name", "Gaspard");
+old_input.set("email", "gaspard@example.com");
+old_input.set("country", "ug");
+old_input.set("newsletter", "1");
+
+vix::ui::Form form = vix::ui::Form::post("/profile/update");
+
+form.add_field(
+    vix::ui::Field::text("name")
+        .set_label("Name"));
+
+form.add_field(
+    vix::ui::Field::email("email")
+        .set_label("Email"));
+
+vix::ui::Field country = vix::ui::Field::select("country")
+                             .set_label("Country");
+
+country.add_option("ug", "Uganda");
+country.add_option("cd", "DRC");
+country.add_option("rw", "Rwanda");
+
+form.add_field(country);
+
+form.add_field(
+    vix::ui::Field::checkbox("newsletter")
+        .set_label("Receive product updates")
+        .set_value("1"));
+
+form.bind(old_input);
+```
+
+## CSRF helper
+
+`CsrfToken` is a rendering helper only.
+
+It does not generate, sign, rotate, or validate tokens. Applications should do that in their own security layer.
+
+```cpp
+#include <vix/ui/forms/CsrfToken.hpp>
+#include <vix/ui/forms/Form.hpp>
+
+vix::ui::Form form = vix::ui::Form::post("/account/update");
+
+form.set_csrf(
+    vix::ui::CsrfToken::named("_csrf", "secure-token-value"));
+
+std::string csrf_input = form.render_csrf();
+```
+
+Rendered output:
+
+```html
+<input id="_csrf" name="_csrf" type="hidden" value="secure-token-value" />
+```
+
 ## Live UI fragments
 
 `Fragment` represents a small server-rendered HTML piece.
@@ -288,7 +418,7 @@ vix::ui::ShellConfig config;
 config.set_name("Vix Admin")
       .set_title("Vix Admin")
       .set_app_id("com.vix.admin")
-      .set_app_version("0.5.0")
+      .set_app_version("0.6.0")
       .set_vendor("Vix.cpp")
       .set_host("127.0.0.1")
       .set_port(8080)
@@ -335,8 +465,11 @@ include/vix/ui/
     AssetManifest.hpp
 
   forms/
-    Form.hpp
+    CsrfToken.hpp
     Field.hpp
+    FieldOption.hpp
+    Form.hpp
+    FormData.hpp
     ValidationError.hpp
 
   live/
@@ -383,6 +516,8 @@ vix run examples/04_forms.cpp
 vix run examples/06_fragment.cpp
 vix run examples/07_live_update.cpp
 vix run examples/08_flash_and_toast.cpp
+vix run examples/09_rich_forms.cpp
+vix run examples/10_form_binding.cpp
 ```
 
 Build benchmarks with CMake:
@@ -424,6 +559,9 @@ The UI module is responsible for:
 - HTML response data
 - asset helpers
 - form helpers
+- form data binding
+- old input values
+- CSRF rendering helpers
 - live UI fragments
 - WebSocket-friendly update payloads
 - flash and toast rendering helpers

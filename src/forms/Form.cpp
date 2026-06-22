@@ -59,6 +59,87 @@ namespace vix::ui
           });
     }
 
+    bool has_file_field(const std::vector<Field> &fields) noexcept
+    {
+      for (const auto &field : fields)
+      {
+        if (field.type() == FieldType::File)
+        {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    void apply_bound_data(Field &field, const FormData &data)
+    {
+      if (!field.has_name())
+      {
+        return;
+      }
+
+      if (!data.has(field.name()))
+      {
+        return;
+      }
+
+      if (field.type() == FieldType::File)
+      {
+        return;
+      }
+
+      const std::vector<std::string> *values = data.get_all(field.name());
+
+      if (values == nullptr)
+      {
+        return;
+      }
+
+      switch (field.type())
+      {
+      case FieldType::Checkbox:
+        if (field.has_value())
+        {
+          field.set_checked(data.contains(field.name(), field.value()));
+        }
+        else
+        {
+          field.set_checked(!values->empty());
+        }
+        return;
+
+      case FieldType::Radio:
+      case FieldType::Select:
+        if (!values->empty())
+        {
+          field.set_value(values->front());
+        }
+
+        for (auto &option : field.options())
+        {
+          option.set_selected(data.contains(field.name(), option.value()));
+        }
+        return;
+
+      case FieldType::Text:
+      case FieldType::Email:
+      case FieldType::Number:
+      case FieldType::Hidden:
+      case FieldType::Textarea:
+        if (!values->empty())
+        {
+          field.set_value(values->front());
+        }
+        return;
+
+      case FieldType::Password:
+      case FieldType::File:
+      case FieldType::Custom:
+        return;
+      }
+    }
+
     std::string render_field_wrapper(const Field &field)
     {
       if (field.type() == FieldType::Hidden)
@@ -166,6 +247,49 @@ namespace vix::ui
     return *this;
   }
 
+  Form &Form::bind(FormData data)
+  {
+    data_ = std::move(data);
+
+    for (auto &field : fields_)
+    {
+      apply_bound_data(field, data_);
+    }
+
+    return *this;
+  }
+
+  Form &Form::set_data(FormData data)
+  {
+    data_ = std::move(data);
+    return *this;
+  }
+
+  void Form::clear_data() noexcept
+  {
+    data_.clear();
+  }
+
+  Form &Form::set_csrf(CsrfToken token)
+  {
+    csrf_ = std::move(token);
+    has_csrf_ = true;
+    return *this;
+  }
+
+  Form &Form::set_csrf(std::string value)
+  {
+    csrf_ = CsrfToken::make(std::move(value));
+    has_csrf_ = true;
+    return *this;
+  }
+
+  void Form::clear_csrf() noexcept
+  {
+    csrf_ = CsrfToken{};
+    has_csrf_ = false;
+  }
+
   Form &Form::add_field(Field field)
   {
     if (Field *existing = this->field(field.name()))
@@ -193,6 +317,11 @@ namespace vix::ui
     return add_field(Field::password(std::move(name)));
   }
 
+  Form &Form::add_number(std::string name)
+  {
+    return add_field(Field::number(std::move(name)));
+  }
+
   Form &Form::add_hidden(
       std::string name,
       std::string value)
@@ -205,9 +334,24 @@ namespace vix::ui
     return add_field(Field::checkbox(std::move(name)));
   }
 
+  Form &Form::add_radio(std::string name)
+  {
+    return add_field(Field::radio(std::move(name)));
+  }
+
   Form &Form::add_textarea(std::string name)
   {
     return add_field(Field::textarea(std::move(name)));
+  }
+
+  Form &Form::add_select(std::string name)
+  {
+    return add_field(Field::select(std::move(name)));
+  }
+
+  Form &Form::add_file(std::string name)
+  {
+    return add_field(Field::file(std::move(name)));
   }
 
   bool Form::has_field(std::string_view name) const noexcept
@@ -308,6 +452,21 @@ namespace vix::ui
     return attrs_;
   }
 
+  const FormData &Form::data() const noexcept
+  {
+    return data_;
+  }
+
+  FormData &Form::data() noexcept
+  {
+    return data_;
+  }
+
+  const CsrfToken &Form::csrf() const noexcept
+  {
+    return csrf_;
+  }
+
   const std::vector<Field> &Form::fields() const noexcept
   {
     return fields_;
@@ -336,6 +495,16 @@ namespace vix::ui
   bool Form::has_errors() const noexcept
   {
     return !errors_.empty();
+  }
+
+  bool Form::has_data() const noexcept
+  {
+    return !data_.empty();
+  }
+
+  bool Form::has_csrf() const noexcept
+  {
+    return has_csrf_;
   }
 
   bool Form::empty() const noexcept
@@ -370,6 +539,7 @@ namespace vix::ui
 
     return true;
   }
+
   bool Form::invalid() const noexcept
   {
     return !valid();
@@ -385,6 +555,11 @@ namespace vix::ui
     }
 
     attrs.set("method", std::string(to_string(method_)));
+
+    if (has_file_field(fields_) && !attrs.has("enctype"))
+    {
+      attrs.set("enctype", "multipart/form-data");
+    }
 
     return Html::open_tag("form", attrs);
   }
@@ -426,13 +601,45 @@ namespace vix::ui
     return Html::tag("ul", items, attrs);
   }
 
+  std::string Form::render_error_summary() const
+  {
+    const std::string errors = render_errors();
+
+    if (errors.empty())
+    {
+      return {};
+    }
+
+    HtmlAttrs attrs;
+    attrs.set("class", "form-error-summary");
+    attrs.set("role", "alert");
+
+    return Html::tag("div", errors, attrs);
+  }
+
+  std::string Form::render_csrf() const
+  {
+    if (!has_csrf_)
+    {
+      return {};
+    }
+
+    return csrf_.render();
+  }
+
   std::string Form::render() const
   {
     std::string output;
 
     append_line(output, render_open());
 
-    const std::string errors = render_errors();
+    const std::string csrf = render_csrf();
+    if (!csrf.empty())
+    {
+      append_line(output, csrf);
+    }
+
+    const std::string errors = render_error_summary();
     if (!errors.empty())
     {
       append_line(output, errors);

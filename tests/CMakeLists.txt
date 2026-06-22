@@ -54,3 +54,7 @@ ui_add_test(ui_fragment_test live/fragment_test.cpp)
 ui_add_test(ui_live_update_test live/live_update_test.cpp)
 ui_add_test(ui_flash_message_test live/flash_message_test.cpp)
 ui_add_test(ui_toast_test live/toast_test.cpp)
+
+ui_add_test(ui_field_option_test forms/field_option_test.cpp)
+ui_add_test(ui_form_data_test forms/form_data_test.cpp)
+ui_add_test(ui_csrf_token_test forms/csrf_token_test.cpp)

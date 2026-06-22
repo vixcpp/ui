@@ -91,3 +91,21 @@ target_link_libraries(ui_example_flash_and_toast
   PRIVATE
     vix::ui
 )
+
+add_executable(ui_example_rich_forms
+  09_rich_forms.cpp
+)
+
+target_link_libraries(ui_example_rich_forms
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_form_binding
+  10_form_binding.cpp
+)
+
+target_link_libraries(ui_example_form_binding
+  PRIVATE
+    vix::ui
+)
