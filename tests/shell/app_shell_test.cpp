@@ -14,10 +14,10 @@
  *
  */
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <utility>
-#include <chrono>
 
 #include <vix/ui/platform/Platform.hpp>
 #include <vix/ui/shell/AppShell.hpp>
@@ -25,6 +25,26 @@
 #include <vix/ui/support/Result.hpp>
 
 using namespace vix::ui;
+
+static ShellConfig make_test_shell_config(
+    std::string name = "Vix UI Test",
+    std::string title = "Vix UI Test",
+    std::string url = "http://127.0.0.1:8080")
+{
+  ShellConfig config;
+
+  config.set_name(std::move(name))
+      .set_title(std::move(title))
+      .set_url(std::move(url))
+      .set_platform(Platform::web_platform_descriptor());
+
+  return config;
+}
+
+static AppShell make_test_shell()
+{
+  return AppShell(make_test_shell_config());
+}
 
 static void test_platform_kind_to_string()
 {
@@ -294,10 +314,11 @@ static void test_app_shell_default()
 
 static void test_app_shell_make()
 {
-  ShellConfig config;
-  config.set_name("Vix Admin");
-  config.set_title("Admin Dashboard");
-  config.set_url("http://localhost:8080");
+  ShellConfig config =
+      make_test_shell_config(
+          "Vix Admin",
+          "Admin Dashboard",
+          "http://localhost:8080");
 
   AppShell shell = AppShell::make(config);
 
@@ -311,10 +332,11 @@ static void test_app_shell_set_config()
 {
   AppShell shell;
 
-  ShellConfig config;
-  config.set_name("New App");
-  config.set_title("New Title");
-  config.set_url("http://localhost:9090");
+  ShellConfig config =
+      make_test_shell_config(
+          "New App",
+          "New Title",
+          "http://localhost:9090");
 
   shell.set_config(config);
 
@@ -400,7 +422,7 @@ static void test_app_shell_validate_invalid_height()
 
 static void test_app_shell_start()
 {
-  AppShell shell;
+  AppShell shell = make_test_shell();
 
   Result<void> result = shell.start();
 
@@ -414,6 +436,7 @@ static void test_app_shell_start_invalid_config()
 {
   ShellConfig config;
   config.set_name("");
+  config.set_platform(Platform::web_platform_descriptor());
 
   AppShell shell(config);
 
@@ -426,7 +449,7 @@ static void test_app_shell_start_invalid_config()
 
 static void test_app_shell_stop()
 {
-  AppShell shell;
+  AppShell shell = make_test_shell();
 
   Result<void> start_result = shell.start();
   assert(start_result.is_ok());
@@ -442,7 +465,7 @@ static void test_app_shell_stop()
 
 static void test_app_shell_restart()
 {
-  AppShell shell;
+  AppShell shell = make_test_shell();
 
   Result<void> result = shell.restart();
 
@@ -464,7 +487,7 @@ static void test_app_shell_platform()
 
 static void test_app_shell_start_is_idempotent()
 {
-  AppShell shell;
+  AppShell shell = make_test_shell();
 
   Result<void> first = shell.start();
   Result<void> second = shell.start();
@@ -477,7 +500,7 @@ static void test_app_shell_start_is_idempotent()
 
 static void test_app_shell_stop_is_idempotent()
 {
-  AppShell shell;
+  AppShell shell = make_test_shell();
 
   Result<void> first = shell.stop();
   Result<void> second = shell.stop();
@@ -490,10 +513,11 @@ static void test_app_shell_stop_is_idempotent()
 
 static void test_app_shell_copy_constructor()
 {
-  ShellConfig config;
-  config.set_name("Copied App");
-  config.set_title("Copied Title");
-  config.set_url("http://localhost:5050");
+  ShellConfig config =
+      make_test_shell_config(
+          "Copied App",
+          "Copied Title",
+          "http://localhost:5050");
 
   AppShell original(config);
   AppShell copy(original);
@@ -512,10 +536,11 @@ static void test_app_shell_copy_constructor()
 
 static void test_app_shell_copy_assignment()
 {
-  ShellConfig config;
-  config.set_name("Assigned App");
-  config.set_title("Assigned Title");
-  config.set_url("http://localhost:6060");
+  ShellConfig config =
+      make_test_shell_config(
+          "Assigned App",
+          "Assigned Title",
+          "http://localhost:6060");
 
   AppShell source(config);
   AppShell target;
@@ -536,10 +561,11 @@ static void test_app_shell_copy_assignment()
 
 static void test_app_shell_move_constructor()
 {
-  ShellConfig config;
-  config.set_name("Moved App");
-  config.set_title("Moved Title");
-  config.set_url("http://localhost:7070");
+  ShellConfig config =
+      make_test_shell_config(
+          "Moved App",
+          "Moved Title",
+          "http://localhost:7070");
 
   AppShell original(config);
   AppShell moved(std::move(original));
@@ -556,10 +582,11 @@ static void test_app_shell_move_constructor()
 
 static void test_app_shell_move_assignment()
 {
-  ShellConfig config;
-  config.set_name("Move Assigned App");
-  config.set_title("Move Assigned Title");
-  config.set_url("http://localhost:8088");
+  ShellConfig config =
+      make_test_shell_config(
+          "Move Assigned App",
+          "Move Assigned Title",
+          "http://localhost:8088");
 
   AppShell source(config);
   AppShell target;
@@ -580,10 +607,11 @@ static void test_app_shell_set_config_when_stopped_recreates_backend()
 {
   AppShell shell;
 
-  ShellConfig config;
-  config.set_name("Stopped Config App");
-  config.set_title("Stopped Config Title");
-  config.set_url("http://localhost:9091");
+  ShellConfig config =
+      make_test_shell_config(
+          "Stopped Config App",
+          "Stopped Config Title",
+          "http://localhost:9091");
 
   shell.set_config(config);
 
@@ -600,17 +628,18 @@ static void test_app_shell_set_config_when_stopped_recreates_backend()
 
 static void test_app_shell_set_config_while_running_keeps_shell_running()
 {
-  AppShell shell;
+  AppShell shell = make_test_shell();
 
   Result<void> start_result = shell.start();
 
   assert(start_result.is_ok());
   assert(shell.running());
 
-  ShellConfig config;
-  config.set_name("Running Config App");
-  config.set_title("Running Config Title");
-  config.set_url("http://localhost:9092");
+  ShellConfig config =
+      make_test_shell_config(
+          "Running Config App",
+          "Running Config Title",
+          "http://localhost:9092");
 
   shell.set_config(config);
 
@@ -640,12 +669,13 @@ static void test_shell_config_server_command()
 
 static void test_app_shell_ignores_server_command_when_start_server_disabled()
 {
-  ShellConfig config;
+  ShellConfig config =
+      make_test_shell_config(
+          "No Server App",
+          "No Server Title",
+          "http://localhost:9093");
 
-  config.set_name("No Server App")
-      .set_title("No Server Title")
-      .set_url("http://localhost:9093")
-      .set_start_server(false)
+  config.set_start_server(false)
       .set_server_command("this-command-should-not-run");
 
   AppShell shell(config);
@@ -664,12 +694,13 @@ static void test_app_shell_ignores_server_command_when_start_server_disabled()
 static void test_app_shell_starts_and_stops_server_process()
 {
 #if defined(__unix__) || defined(__APPLE__)
-  ShellConfig config;
+  ShellConfig config =
+      make_test_shell_config(
+          "Server Process App",
+          "Server Process Title",
+          "http://127.0.0.1:9094");
 
-  config.set_name("Server Process App")
-      .set_title("Server Process Title")
-      .set_url("http://127.0.0.1:9094")
-      .set_start_server(true)
+  config.set_start_server(true)
       .set_wait_for_server(false)
       .set_server_command("sleep 30");
 
@@ -685,12 +716,13 @@ static void test_app_shell_starts_and_stops_server_process()
   assert(stop_result.is_ok());
   assert(shell.stopped());
 #else
-  ShellConfig config;
+  ShellConfig config =
+      make_test_shell_config(
+          "Server Process App",
+          "Server Process Title",
+          "http://127.0.0.1:9094");
 
-  config.set_name("Server Process App")
-      .set_title("Server Process Title")
-      .set_url("http://127.0.0.1:9094")
-      .set_start_server(false)
+  config.set_start_server(false)
       .set_server_command("sleep 30");
 
   AppShell shell(config);

@@ -28,7 +28,7 @@ namespace vix::ui
   /**
    * @brief Minor version of the UI module.
    */
-  inline constexpr int VERSION_MINOR = 7;
+  inline constexpr int VERSION_MINOR = 1;
 
   /**
    * @brief Patch version of the UI module.
@@ -38,7 +38,7 @@ namespace vix::ui
   /**
    * @brief Full semantic version string of the UI module.
    */
-  inline constexpr std::string_view VERSION = "0.7.0";
+  inline constexpr std::string_view VERSION = "1.0.0";
 
   /**
    * @brief Get the major version of the UI module.

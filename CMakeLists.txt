@@ -12,7 +12,7 @@ endif()
 set_property(GLOBAL PROPERTY VIX_UI_MODULE_ALREADY_INCLUDED TRUE)
 
 project(ui
-  VERSION 0.7.0
+  VERSION 0.8.0
   DESCRIPTION "Web-first UI and app shell primitives for Vix.cpp applications"
   LANGUAGES CXX
 )
@@ -151,6 +151,11 @@ set(UI_SOURCES
   src/live/LiveUpdate.cpp
   src/live/FlashMessage.cpp
   src/live/Toast.cpp
+
+  src/pwa/Viewport.cpp
+  src/pwa/SafeArea.cpp
+  src/pwa/WebAppManifest.cpp
+  src/pwa/PwaMeta.cpp
 
   src/platform/Platform.cpp
 

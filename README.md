@@ -3,7 +3,7 @@
 Web-first UI and app shell primitives for Vix.cpp applications.
 
 `vix::ui` is a small UI foundation layer built on top of the Vix template engine.
-It helps Vix.cpp applications describe views, render HTML responses, manage assets, build practical server-rendered forms, create live UI fragments, and run server-rendered interfaces inside app shells.
+It helps Vix.cpp applications describe views, render HTML responses, manage assets, build practical server-rendered forms, create live UI fragments, prepare PWA/mobile metadata, and run server-rendered interfaces inside app shells.
 
 It is not a replacement for `vix::template_`.
 It is a higher-level layer that makes template-based web UI development cleaner.
@@ -13,7 +13,7 @@ It is a higher-level layer that makes template-based web UI development cleaner.
 Current module version:
 
 ```txt
-0.6.0
+0.8.0
 ```
 
 ## Goals
@@ -26,7 +26,7 @@ Vix UI follows a simple direction:
 - support server-rendered UI first
 - avoid a heavy frontend framework
 - prepare desktop/mobile shells through WebView containers
-- make dashboards, admin panels, forms, and internal tools easier to build
+- make dashboards, admin panels, forms, internal tools, and mobile-ready web apps easier to build
 
 The first target is server-rendered web UI.
 
@@ -46,6 +46,8 @@ Current primitives:
 - `vix::ui::Asset`
 - `vix::ui::AssetManifest`
 - `vix::ui::AssetManager`
+- `vix::ui::AssetMap`
+- `vix::ui::AssetMode`
 - `vix::ui::Field`
 - `vix::ui::FieldOption`
 - `vix::ui::Form`
@@ -56,6 +58,10 @@ Current primitives:
 - `vix::ui::LiveUpdate`
 - `vix::ui::FlashMessage`
 - `vix::ui::Toast`
+- `vix::ui::Viewport`
+- `vix::ui::SafeArea`
+- `vix::ui::WebAppManifest`
+- `vix::ui::PwaMeta`
 - `vix::ui::Platform`
 - `vix::ui::ShellConfig`
 - `vix::ui::AppShell`
@@ -163,6 +169,40 @@ Example output:
   rel="preload"
 />
 ```
+
+## Asset pipeline helpers
+
+Vix UI provides small asset pipeline helpers for development and production modes.
+
+They are useful when an application needs stable logical names in C++ while production builds use hashed files.
+
+Typical use cases:
+
+- asset versioning
+- manifest lookup
+- hashed asset paths
+- CSS and JavaScript grouping
+- preload helpers
+- module script support
+- production/development asset modes
+
+Example direction:
+
+```cpp
+#include <vix/ui/assets/AssetManager.hpp>
+#include <vix/ui/assets/AssetMap.hpp>
+#include <vix/ui/assets/AssetMode.hpp>
+
+vix::ui::AssetManager assets("/assets");
+
+assets.add_stylesheet("app_css", "app.css");
+assets.add_script("app_js", "app.js", vix::ui::AssetLoading::Deferred);
+
+std::string tags = assets.render();
+```
+
+The asset layer only describes and renders asset references.
+It does not bundle JavaScript, compile CSS, or serve files directly.
 
 ## Forms
 
@@ -401,6 +441,155 @@ vix::ui::Toast toast =
 std::string html = toast.render();
 ```
 
+## PWA viewport helper
+
+`Viewport` renders mobile-friendly viewport metadata.
+
+```cpp
+#include <vix/ui/pwa/Viewport.hpp>
+
+vix::ui::Viewport viewport =
+    vix::ui::Viewport::mobile_app();
+
+std::string html = viewport.render();
+```
+
+Example output:
+
+```html
+<meta
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+  name="viewport"
+/>
+```
+
+## Safe-area CSS helper
+
+`SafeArea` renders CSS variables and classes for mobile safe-area insets.
+
+```cpp
+#include <vix/ui/pwa/SafeArea.hpp>
+
+vix::ui::SafeArea safe_area =
+    vix::ui::SafeArea::vertical();
+
+std::string css = safe_area.render();
+```
+
+Example output:
+
+```css
+:root {
+  --vix-safe-area-top: env(safe-area-inset-top);
+  --vix-safe-area-bottom: env(safe-area-inset-bottom);
+}
+.vix-safe-area {
+  padding-top: var(--vix-safe-area-top);
+  padding-bottom: var(--vix-safe-area-bottom);
+}
+```
+
+## Web app manifest
+
+`WebAppManifest` builds a deterministic manifest JSON document for installable web apps.
+
+```cpp
+#include <vix/ui/pwa/WebAppManifest.hpp>
+
+vix::ui::WebAppManifest manifest =
+    vix::ui::WebAppManifest::app("Vix Mobile", "Vix");
+
+manifest.set_description("A mobile-ready Vix UI application")
+    .set_start_url("/")
+    .set_scope("/")
+    .set_id("com.vix.mobile")
+    .set_lang("en")
+    .set_display(vix::ui::WebAppDisplayMode::Standalone)
+    .set_orientation(vix::ui::WebAppOrientation::Portrait)
+    .set_background_color("#ffffff")
+    .set_theme_color("#111111");
+
+manifest.add_icon(
+    "/icons/icon-192.png",
+    "192x192",
+    "image/png");
+
+manifest.add_icon(
+    "/icons/icon-512.png",
+    "512x512",
+    "image/png",
+    "any maskable");
+
+std::string json = manifest.render();
+```
+
+Example output:
+
+```json
+{
+  "name": "Vix Mobile",
+  "short_name": "Vix",
+  "description": "A mobile-ready Vix UI application",
+  "start_url": "/",
+  "scope": "/",
+  "id": "com.vix.mobile",
+  "lang": "en",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+```
+
+## PWA meta tags
+
+`PwaMeta` renders the HTML metadata commonly needed by mobile-friendly pages and installable web apps.
+
+```cpp
+#include <vix/ui/pwa/PwaMeta.hpp>
+
+vix::ui::PwaMeta meta =
+    vix::ui::PwaMeta::mobile_app("Vix Mobile", "#111111");
+
+meta.set_color_scheme("light dark")
+    .set_format_detection("telephone=no");
+
+std::string html = meta.render();
+```
+
+Example output:
+
+```html
+<meta
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+  name="viewport"
+/>
+<link href="/manifest.webmanifest" rel="manifest" />
+<meta content="#111111" name="theme-color" />
+<meta content="Vix Mobile" name="application-name" />
+<meta content="yes" name="apple-mobile-web-app-capable" />
+<meta content="Vix Mobile" name="apple-mobile-web-app-title" />
+<meta
+  content="black-translucent"
+  name="apple-mobile-web-app-status-bar-style"
+/>
+<meta content="light dark" name="color-scheme" />
+<meta content="telephone=no" name="format-detection" />
+```
+
 ## App shell
 
 `AppShell` is the public shell facade for Vix UI applications.
@@ -418,7 +607,7 @@ vix::ui::ShellConfig config;
 config.set_name("Vix Admin")
       .set_title("Vix Admin")
       .set_app_id("com.vix.admin")
-      .set_app_version("0.6.0")
+      .set_app_version("0.8.0")
       .set_vendor("Vix.cpp")
       .set_host("127.0.0.1")
       .set_port(8080)
@@ -463,6 +652,8 @@ include/vix/ui/
     Asset.hpp
     AssetManager.hpp
     AssetManifest.hpp
+    AssetMap.hpp
+    AssetMode.hpp
 
   forms/
     CsrfToken.hpp
@@ -478,11 +669,21 @@ include/vix/ui/
     FlashMessage.hpp
     Toast.hpp
 
+  pwa/
+    Viewport.hpp
+    SafeArea.hpp
+    WebAppManifest.hpp
+    PwaMeta.hpp
+
   shell/
     AppShell.hpp
     ShellConfig.hpp
     ServerProcess.hpp
     ServerReadiness.hpp
+    backends/
+      DescriptorShellBackend.hpp
+      LinuxWebViewShellBackend.hpp
+      ShellBackend.hpp
 
   platform/
     Platform.hpp
@@ -513,11 +714,16 @@ vix run examples/01_basic_view.cpp
 vix run examples/02_html_response.cpp
 vix run examples/03_assets.cpp
 vix run examples/04_forms.cpp
+vix run examples/05_shell_config_v04.cpp
 vix run examples/06_fragment.cpp
 vix run examples/07_live_update.cpp
 vix run examples/08_flash_and_toast.cpp
 vix run examples/09_rich_forms.cpp
 vix run examples/10_form_binding.cpp
+vix run examples/11_asset_pipeline.cpp
+vix run examples/12_asset_manifest.cpp
+vix run examples/13_pwa_helpers.cpp
+vix run examples/14_web_app_manifest.cpp
 ```
 
 Build benchmarks with CMake:
@@ -557,7 +763,9 @@ The UI module is responsible for:
 - view contexts
 - HTML helpers
 - HTML response data
-- asset helpers
+- asset descriptors
+- asset manifests
+- asset pipeline helpers
 - form helpers
 - form data binding
 - old input values
@@ -565,7 +773,12 @@ The UI module is responsible for:
 - live UI fragments
 - WebSocket-friendly update payloads
 - flash and toast rendering helpers
+- mobile viewport helpers
+- safe-area CSS helpers
+- web app manifest metadata
+- PWA meta tag rendering
 - platform/app shell primitives
+- server process helpers
 - server readiness helpers
 
 This keeps the architecture simple and avoids building a heavy UI framework too early.

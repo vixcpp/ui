@@ -68,6 +68,14 @@
 #include <vix/ui/live/Toast.hpp>
 
 /*
+ * PWA
+ */
+#include <vix/ui/pwa/Viewport.hpp>
+#include <vix/ui/pwa/SafeArea.hpp>
+#include <vix/ui/pwa/WebAppManifest.hpp>
+#include <vix/ui/pwa/PwaMeta.hpp>
+
+/*
  * Platform
  */
 #include <vix/ui/platform/Platform.hpp>

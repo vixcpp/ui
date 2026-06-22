@@ -55,6 +55,11 @@ ui_add_test(ui_live_update_test live/live_update_test.cpp)
 ui_add_test(ui_flash_message_test live/flash_message_test.cpp)
 ui_add_test(ui_toast_test live/toast_test.cpp)
 
+ui_add_test(ui_viewport_test pwa/viewport_test.cpp)
+ui_add_test(ui_safe_area_test pwa/safe_area_test.cpp)
+ui_add_test(ui_web_app_manifest_test pwa/web_app_manifest_test.cpp)
+ui_add_test(ui_pwa_meta_test pwa/pwa_meta_test.cpp)
+
 ui_add_test(ui_field_option_test forms/field_option_test.cpp)
 ui_add_test(ui_form_data_test forms/form_data_test.cpp)
 ui_add_test(ui_csrf_token_test forms/csrf_token_test.cpp)

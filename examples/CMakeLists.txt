@@ -127,3 +127,21 @@ target_link_libraries(ui_example_asset_manifest
   PRIVATE
     vix::ui
 )
+
+add_executable(ui_example_pwa_helpers
+  13_pwa_helpers.cpp
+)
+
+target_link_libraries(ui_example_pwa_helpers
+  PRIVATE
+    vix::ui
+)
+
+add_executable(ui_example_web_app_manifest
+  14_web_app_manifest.cpp
+)
+
+target_link_libraries(ui_example_web_app_manifest
+  PRIVATE
+    vix::ui
+)
