@@ -21,9 +21,44 @@
 #include <vix/ui/shell/ServerReadiness.hpp>
 
 #include <utility>
+#include <chrono>
 
 namespace vix::ui
 {
+  namespace
+  {
+    [[nodiscard]] Result<void> ensure_server_endpoint_free_if_needed(
+        const ShellConfig &config)
+    {
+      if (!config.start_server())
+      {
+        return Result<void>::ok();
+      }
+
+      if (!config.has_server_command())
+      {
+        return Result<void>::ok();
+      }
+
+      const std::string readiness_url =
+          config.effective_readiness_url();
+
+      Result<void> existing =
+          ServerReadiness::wait(
+              readiness_url,
+              std::chrono::milliseconds(0));
+
+      if (existing.is_ok())
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "server readiness endpoint is already in use: " + readiness_url);
+      }
+
+      return Result<void>::ok();
+    }
+  } // namespace
+
   AppShell::AppShell()
       : backend_(make_backend())
   {
@@ -35,7 +70,10 @@ namespace vix::ui
   {
   }
 
-  AppShell::~AppShell() = default;
+  AppShell::~AppShell()
+  {
+    (void)stop();
+  }
 
   AppShell::AppShell(const AppShell &other)
       : config_(other.config_),
@@ -144,6 +182,14 @@ namespace vix::ui
       return validation;
     }
 
+    Result<void> endpoint_result =
+        ensure_server_endpoint_free_if_needed(config_);
+
+    if (endpoint_result.is_failed())
+    {
+      return endpoint_result;
+    }
+
     Result<void> server_result = start_server_if_needed();
     if (server_result.is_failed())
     {
@@ -158,24 +204,22 @@ namespace vix::ui
     }
 
     Result<void> shell_result = start_platform_shell();
+
+    Result<void> stop_server_result = Result<void>::ok();
+
+    if (config_.start_server())
+    {
+      stop_server_result = stop_server_if_needed();
+    }
+
     if (shell_result.is_failed())
     {
-      (void)stop_server_if_needed();
       return shell_result;
     }
 
-    /*
-     * Native desktop backends may block until the window is closed.
-     * If the backend is already stopped when start() returns, stop the
-     * local server too.
-     */
-    if (stopped())
+    if (stop_server_result.is_failed())
     {
-      Result<void> stop_server_result = stop_server_if_needed();
-      if (stop_server_result.is_failed())
-      {
-        return stop_server_result;
-      }
+      return stop_server_result;
     }
 
     return Result<void>::ok();

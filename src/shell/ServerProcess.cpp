@@ -16,6 +16,8 @@
 #include <vix/ui/shell/ServerProcess.hpp>
 
 #include <utility>
+#include <thread>
+#include <chrono>
 
 #if defined(__unix__) || defined(__APPLE__)
 #include <cerrno>
@@ -124,6 +126,7 @@ namespace vix::ui
 
     if (child == 0)
     {
+      (void)setpgid(0, 0);
       const int null_fd = open("/dev/null", O_RDONLY);
       if (null_fd >= 0)
       {
@@ -145,6 +148,14 @@ namespace vix::ui
     }
 
     pid_ = static_cast<std::int64_t>(child);
+
+    if (setpgid(child, child) != 0 && errno != EACCES && errno != ESRCH)
+    {
+      return Result<void>::fail(
+          ErrorCode::RuntimeError,
+          std::string("failed to create server process group: ") + std::strerror(errno));
+    }
+
     running_ = true;
 
     return Result<void>::ok();
@@ -168,7 +179,27 @@ namespace vix::ui
 
     if (process_id > 0)
     {
-      if (kill(process_id, SIGTERM) != 0 && errno != ESRCH)
+      auto terminate_group = [&](int signal) -> bool
+      {
+        if (kill(-process_id, signal) == 0)
+        {
+          return true;
+        }
+
+        if (errno == ESRCH)
+        {
+          return true;
+        }
+
+        if (kill(process_id, signal) == 0)
+        {
+          return true;
+        }
+
+        return errno == ESRCH;
+      };
+
+      if (!terminate_group(SIGTERM))
       {
         return Result<void>::fail(
             ErrorCode::RuntimeError,
@@ -176,7 +207,40 @@ namespace vix::ui
       }
 
       int status = 0;
-      (void)waitpid(process_id, &status, 0);
+      bool exited = false;
+
+      for (int i = 0; i < 30; ++i)
+      {
+        const pid_t waited =
+            waitpid(process_id, &status, WNOHANG);
+
+        if (waited == process_id || waited == -1)
+        {
+          exited = true;
+          break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+
+      if (!exited)
+      {
+        (void)terminate_group(SIGKILL);
+
+        for (int i = 0; i < 20; ++i)
+        {
+          const pid_t waited =
+              waitpid(process_id, &status, WNOHANG);
+
+          if (waited == process_id || waited == -1)
+          {
+            exited = true;
+            break;
+          }
+
+          std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+      }
     }
 
     reset();
