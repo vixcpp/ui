@@ -62,7 +62,7 @@ namespace vix::ui
   {
     for (auto &[logical_path, resolved_path] : entries)
     {
-      set(std::move(logical_path), std::move(resolved_path));
+      set(logical_path, std::move(resolved_path));
     }
   }
 

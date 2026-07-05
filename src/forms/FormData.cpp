@@ -32,7 +32,7 @@ namespace vix::ui
   {
     for (auto &[name, value] : values)
     {
-      set(std::move(name), std::move(value));
+      set(name, std::move(value));
     }
   }
 
