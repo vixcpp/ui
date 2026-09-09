@@ -16,6 +16,7 @@
 #ifndef VIX_UI_MOBILE_ANDROID_PROJECT_HPP
 #define VIX_UI_MOBILE_ANDROID_PROJECT_HPP
 
+#include <filesystem>
 #include <string>
 
 #include <vix/ui/mobile/MobileProject.hpp>
@@ -72,6 +73,18 @@ namespace vix::ui
 
     /** @brief Get the Android Gradle Plugin version. */
     [[nodiscard]] const std::string &android_gradle_plugin_version() const noexcept;
+
+    /**
+     * @brief Generate the base Android project files.
+     *
+     * The output contains only the Gradle settings and build configuration
+     * required by the Android project skeleton.
+     *
+     * @param directory Output directory for the Android project.
+     * @return Successful result when all files were generated.
+     */
+    [[nodiscard]] Result<void> generate(
+        const std::filesystem::path &directory) const;
 
     /**
      * @brief Validate the common and Android-specific configuration.
