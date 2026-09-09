@@ -178,6 +178,17 @@ static void test_generates_base_android_files()
   assert(fs::is_regular_file(directory / "build.gradle"));
   assert(fs::is_regular_file(directory / "gradle.properties"));
   assert(fs::is_regular_file(directory / "app" / "build.gradle"));
+  assert(fs::is_regular_file(directory / "app" / "src" / "main" /
+                             "AndroidManifest.xml"));
+  assert(fs::is_regular_file(directory / "app" / "src" / "main" / "java" /
+                             "com" / "softadastra" / "vix" / "mobile" /
+                             "demo" / "MainActivity.java"));
+  assert(fs::is_regular_file(directory / "app" / "src" / "main" / "res" /
+                             "values" / "strings.xml"));
+  assert(fs::is_regular_file(directory / "app" / "src" / "main" / "res" /
+                             "values" / "colors.xml"));
+  assert(fs::is_regular_file(directory / "app" / "src" / "main" / "res" /
+                             "values" / "styles.xml"));
 
   assert(read_file(directory / "settings.gradle") ==
          "pluginManagement {\n"
@@ -201,6 +212,43 @@ static void test_generates_base_android_files()
          "plugins {\n"
          "    id 'com.android.application' version '8.13.2' apply false\n"
          "}\n");
+
+  const fs::path main_root = directory / "app" / "src" / "main";
+  const std::string manifest = read_file(main_root / "AndroidManifest.xml");
+  const std::string activity = read_file(
+      main_root / "java" / "com" / "softadastra" / "vix" / "mobile" /
+      "demo" / "MainActivity.java");
+  assert(manifest.find("android.permission.INTERNET") != std::string::npos);
+  assert(manifest.find("android:label=\"@string/app_name\"") != std::string::npos);
+  assert(manifest.find("android:theme=\"@style/AppTheme\"") != std::string::npos);
+  assert(manifest.find("android:usesCleartextTraffic") == std::string::npos);
+  assert(activity.find("package com.softadastra.vix.mobile.demo;") != std::string::npos);
+  assert(activity.find("https://example.test") != std::string::npos);
+  assert(activity.find("settings.setJavaScriptEnabled(true);") != std::string::npos);
+  assert(activity.find("settings.setDomStorageEnabled(true);") != std::string::npos);
+  assert(activity.find("settings.setAllowFileAccess(false);") != std::string::npos);
+  assert(activity.find("settings.setAllowContentAccess(false);") != std::string::npos);
+  assert(activity.find("webView.canGoBack()") != std::string::npos);
+  assert(activity.find("webView.destroy();") != std::string::npos);
+
+  assert(read_file(main_root / "res" / "values" / "strings.xml") ==
+         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+         "<resources>\n"
+         "    <string name=\"app_name\">Vix Mobile Demo</string>\n"
+         "</resources>\n");
+  assert(read_file(main_root / "res" / "values" / "colors.xml") ==
+         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+         "<resources>\n"
+         "    <color name=\"vix_accent\">#f37726</color>\n"
+         "</resources>\n");
+  assert(read_file(main_root / "res" / "values" / "styles.xml").find(
+             "<style name=\"AppTheme\"") != std::string::npos);
+
+  const fs::path local_properties = directory / "local.properties";
+  if (fs::exists(local_properties))
+  {
+    assert(read_file(local_properties).rfind("sdk.dir=", 0) == 0);
+  }
 
   assert(read_file(directory / "gradle.properties") ==
          "org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8\n"
@@ -239,12 +287,22 @@ static void test_generation_is_deterministic()
   const std::string first_root_build = read_file(directory / "build.gradle");
   const std::string first_properties = read_file(directory / "gradle.properties");
   const std::string first_app_build = read_file(directory / "app" / "build.gradle");
+  const std::string first_manifest = read_file(
+      directory / "app" / "src" / "main" / "AndroidManifest.xml");
+  const std::string first_activity = read_file(
+      directory / "app" / "src" / "main" / "java" / "com" /
+      "softadastra" / "vix" / "mobile" / "demo" / "MainActivity.java");
 
   assert(project.generate(directory).is_ok());
   assert(read_file(directory / "settings.gradle") == first_settings);
   assert(read_file(directory / "build.gradle") == first_root_build);
   assert(read_file(directory / "gradle.properties") == first_properties);
   assert(read_file(directory / "app" / "build.gradle") == first_app_build);
+  assert(read_file(directory / "app" / "src" / "main" / "AndroidManifest.xml") ==
+         first_manifest);
+  assert(read_file(directory / "app" / "src" / "main" / "java" / "com" /
+                   "softadastra" / "vix" / "mobile" / "demo" /
+                   "MainActivity.java") == first_activity);
 
   fs::remove_all(directory, error);
   assert(!error);
@@ -265,6 +323,51 @@ static void test_generation_validates_before_writing()
   assert(!fs::exists(directory));
 }
 
+static void test_http_enables_cleartext_and_https_does_not()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  project.config().set_url("http://127.0.0.1:8080");
+  assert(project.generate(directory).is_ok());
+  assert(read_file(directory / "app" / "src" / "main" /
+                   "AndroidManifest.xml")
+             .find("android:usesCleartextTraffic=\"true\"") !=
+         std::string::npos);
+
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  project.config().set_url("https://example.test");
+  assert(project.generate(directory).is_ok());
+  assert(read_file(directory / "app" / "src" / "main" /
+                   "AndroidManifest.xml")
+             .find("android:usesCleartextTraffic") == std::string::npos);
+
+  fs::remove_all(directory, error);
+  assert(!error);
+}
+
+static void test_invalid_package_name_is_rejected_before_writing()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  project.config().set_app_id("com.example.invalid-package");
+  Result<void> result = project.generate(directory);
+
+  assert(result.is_failed());
+  assert(result.error_message() ==
+         "Android project application id is not a valid Java package name");
+  assert(!fs::exists(directory));
+}
+
 int main()
 {
   test_default_values();
@@ -279,6 +382,8 @@ int main()
   test_generates_base_android_files();
   test_generation_is_deterministic();
   test_generation_validates_before_writing();
+  test_http_enables_cleartext_and_https_does_not();
+  test_invalid_package_name_is_rejected_before_writing();
 
   std::cout << "android_project_test: all tests passed\n";
   return 0;

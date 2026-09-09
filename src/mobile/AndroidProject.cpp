@@ -16,6 +16,7 @@
 #include <vix/ui/mobile/AndroidProject.hpp>
 
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <utility>
@@ -73,6 +74,231 @@ namespace vix::ui
         }
 
         result.push_back(character);
+      }
+
+      return result;
+    }
+
+    [[nodiscard]] std::string xml_escape(std::string_view value)
+    {
+      std::string result;
+
+      for (char character : value)
+      {
+        switch (character)
+        {
+        case '&':
+          result += "&amp;";
+          break;
+        case '<':
+          result += "&lt;";
+          break;
+        case '>':
+          result += "&gt;";
+          break;
+        case '"':
+          result += "&quot;";
+          break;
+        case '\'':
+          result += "&apos;";
+          break;
+        default:
+          result.push_back(character);
+          break;
+        }
+      }
+
+      return result;
+    }
+
+    [[nodiscard]] std::string java_string(std::string_view value)
+    {
+      std::string result;
+      result.reserve(value.size());
+
+      for (char character : value)
+      {
+        switch (character)
+        {
+        case '\\':
+          result += "\\\\";
+          break;
+        case '"':
+          result += "\\\"";
+          break;
+        case '\n':
+          result += "\\n";
+          break;
+        case '\r':
+          result += "\\r";
+          break;
+        default:
+          result.push_back(character);
+          break;
+        }
+      }
+
+      return result;
+    }
+
+    [[nodiscard]] bool valid_package_part(std::string_view part)
+    {
+      if (part.empty())
+      {
+        return false;
+      }
+
+      const unsigned char first = static_cast<unsigned char>(part.front());
+      if (!std::isalpha(first) && part.front() != '_')
+      {
+        return false;
+      }
+
+      for (char character : part)
+      {
+        const unsigned char value = static_cast<unsigned char>(character);
+        if (!std::isalnum(value) && character != '_')
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    [[nodiscard]] bool valid_package_name(std::string_view package_name)
+    {
+      std::size_t start = 0;
+      int parts = 0;
+
+      while (start < package_name.size())
+      {
+        const std::size_t dot = package_name.find('.', start);
+        const std::string_view part =
+            dot == std::string_view::npos
+                ? package_name.substr(start)
+                : package_name.substr(start, dot - start);
+
+        if (!valid_package_part(part))
+        {
+          return false;
+        }
+
+        ++parts;
+
+        if (dot == std::string_view::npos)
+        {
+          break;
+        }
+
+        start = dot + 1;
+      }
+
+      return parts >= 2;
+    }
+
+    [[nodiscard]] std::filesystem::path java_package_directory(
+        const std::filesystem::path &root,
+        std::string_view package_name)
+    {
+      std::filesystem::path result = root;
+      std::size_t start = 0;
+
+      while (start < package_name.size())
+      {
+        const std::size_t dot = package_name.find('.', start);
+        const std::string_view part =
+            dot == std::string_view::npos
+                ? package_name.substr(start)
+                : package_name.substr(start, dot - start);
+        result /= std::string(part);
+
+        if (dot == std::string_view::npos)
+        {
+          break;
+        }
+
+        start = dot + 1;
+      }
+
+      return result;
+    }
+
+    [[nodiscard]] bool uses_cleartext(std::string_view url)
+    {
+      return url.rfind("http://", 0) == 0;
+    }
+
+    [[nodiscard]] std::filesystem::path existing_directory(
+        const char *value)
+    {
+      if (value == nullptr || *value == '\0')
+      {
+        return {};
+      }
+
+      const std::filesystem::path path(value);
+      std::error_code error;
+      if (std::filesystem::is_directory(path, error) && !error)
+      {
+        return path;
+      }
+
+      return {};
+    }
+
+    [[nodiscard]] std::filesystem::path detect_android_sdk_directory()
+    {
+      if (const std::filesystem::path sdk =
+              existing_directory(std::getenv("ANDROID_HOME"));
+          !sdk.empty())
+      {
+        return sdk;
+      }
+
+      if (const std::filesystem::path sdk =
+              existing_directory(std::getenv("ANDROID_SDK_ROOT"));
+          !sdk.empty())
+      {
+        return sdk;
+      }
+
+      const char *home = std::getenv("HOME");
+      if (home == nullptr || *home == '\0')
+      {
+        return {};
+      }
+
+      const std::filesystem::path candidate =
+          std::filesystem::path(home) / "Android" / "Sdk";
+      std::error_code error;
+      if (std::filesystem::is_directory(candidate, error) && !error)
+      {
+        return candidate;
+      }
+
+      return {};
+    }
+
+    [[nodiscard]] std::string local_properties_path(
+        const std::filesystem::path &path)
+    {
+      std::string result;
+
+      for (char character : path.string())
+      {
+        if (character == '\\')
+        {
+          result += "\\\\";
+        }
+        else if (character == ':')
+        {
+          result += "\\:";
+        }
+        else
+        {
+          result.push_back(character);
+        }
       }
 
       return result;
@@ -145,10 +371,150 @@ namespace vix::ui
       return output.str();
     }
 
+    [[nodiscard]] std::string render_manifest(const AndroidProject &project)
+    {
+      std::ostringstream output;
+
+      output
+          << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+          << "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n"
+          << "    <uses-permission android:name=\"android.permission.INTERNET\" />\n\n"
+          << "    <application\n"
+          << "        android:allowBackup=\"true\"\n"
+          << "        android:label=\"@string/app_name\"\n"
+          << "        android:supportsRtl=\"true\"\n"
+          << "        android:theme=\"@style/AppTheme\"";
+
+      if (uses_cleartext(project.config().url()))
+      {
+        output << "\n        android:usesCleartextTraffic=\"true\"";
+      }
+
+      output
+          << ">\n"
+          << "        <activity\n"
+          << "            android:name=\".MainActivity\"\n"
+          << "            android:exported=\"true\">\n"
+          << "            <intent-filter>\n"
+          << "                <action android:name=\"android.intent.action.MAIN\" />\n"
+          << "                <category android:name=\"android.intent.category.LAUNCHER\" />\n"
+          << "            </intent-filter>\n"
+          << "        </activity>\n"
+          << "    </application>\n"
+          << "</manifest>\n";
+
+      return output.str();
+    }
+
+    [[nodiscard]] std::string render_main_activity(
+        const AndroidProject &project)
+    {
+      const MobileConfig &config = project.config();
+      std::ostringstream output;
+
+      output
+          << "package " << config.app_id() << ";\n\n"
+          << "import android.annotation.SuppressLint;\n"
+          << "import android.app.Activity;\n"
+          << "import android.os.Bundle;\n"
+          << "import android.webkit.WebResourceRequest;\n"
+          << "import android.webkit.WebSettings;\n"
+          << "import android.webkit.WebView;\n"
+          << "import android.webkit.WebViewClient;\n\n"
+          << "public class MainActivity extends Activity {\n"
+          << "    private static final String APP_URL = \""
+          << java_string(config.url()) << "\";\n\n"
+          << "    private WebView webView;\n\n"
+          << "    @SuppressLint(\"SetJavaScriptEnabled\")\n"
+          << "    @Override\n"
+          << "    protected void onCreate(Bundle savedInstanceState) {\n"
+          << "        super.onCreate(savedInstanceState);\n\n"
+          << "        webView = new WebView(this);\n"
+          << "        setContentView(webView);\n\n"
+          << "        WebSettings settings = webView.getSettings();\n"
+          << "        settings.setJavaScriptEnabled(true);\n"
+          << "        settings.setDomStorageEnabled(true);\n"
+          << "        settings.setLoadWithOverviewMode(true);\n"
+          << "        settings.setUseWideViewPort(true);\n"
+          << "        settings.setAllowFileAccess(false);\n"
+          << "        settings.setAllowContentAccess(false);\n\n"
+          << "        webView.setWebViewClient(new WebViewClient() {\n"
+          << "            @Override\n"
+          << "            public boolean shouldOverrideUrlLoading(\n"
+          << "                    WebView view,\n"
+          << "                    WebResourceRequest request) {\n"
+          << "                view.loadUrl(request.getUrl().toString());\n"
+          << "                return true;\n"
+          << "            }\n"
+          << "        });\n\n"
+          << "        webView.loadUrl(APP_URL);\n"
+          << "    }\n\n"
+          << "    @Override\n"
+          << "    public void onBackPressed() {\n"
+          << "        if (webView != null && webView.canGoBack()) {\n"
+          << "            webView.goBack();\n"
+          << "            return;\n"
+          << "        }\n\n"
+          << "        super.onBackPressed();\n"
+          << "    }\n\n"
+          << "    @Override\n"
+          << "    protected void onDestroy() {\n"
+          << "        if (webView != null) {\n"
+          << "            webView.destroy();\n"
+          << "            webView = null;\n"
+          << "        }\n\n"
+          << "        super.onDestroy();\n"
+          << "    }\n"
+          << "}\n";
+
+      return output.str();
+    }
+
+    [[nodiscard]] std::string render_strings_xml(
+        const AndroidProject &project)
+    {
+      return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+             "<resources>\n"
+             "    <string name=\"app_name\">" +
+             xml_escape(project.config().name()) +
+             "</string>\n"
+             "</resources>\n";
+    }
+
+    [[nodiscard]] std::string render_colors_xml()
+    {
+      return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+             "<resources>\n"
+             "    <color name=\"vix_accent\">#f37726</color>\n"
+             "</resources>\n";
+    }
+
+    [[nodiscard]] std::string render_styles_xml()
+    {
+      return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+             "<resources>\n"
+             "    <style name=\"AppTheme\" parent=\"android:style/Theme.Material.Light.NoActionBar\">\n"
+             "        <item name=\"android:fontFamily\">sans</item>\n"
+             "        <item name=\"android:windowLightStatusBar\">true</item>\n"
+             "        <item name=\"android:colorAccent\">@color/vix_accent</item>\n"
+             "    </style>\n"
+             "</resources>\n";
+    }
+
     [[nodiscard]] Result<void> write_text_file(
         const std::filesystem::path &path,
         const std::string &content)
     {
+      std::error_code error;
+      std::filesystem::create_directories(path.parent_path(), error);
+      if (error)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "cannot create Android project directory: " +
+                path.parent_path().string() + ": " + error.message());
+      }
+
       std::ofstream output(path, std::ios::binary | std::ios::trunc);
 
       if (!output.is_open())
@@ -248,25 +614,37 @@ namespace vix::ui
           "Android project output directory must not be empty");
     }
 
-    std::error_code error;
-    std::filesystem::create_directories(directory / "app", error);
-    if (error)
-    {
-      return Result<void>::fail(
-          ErrorCode::RuntimeError,
-          "cannot create Android project directory: " +
-              directory.string() + ": " + error.message());
-    }
+    const std::filesystem::path app_root = directory / "app";
+    const std::filesystem::path main_root = app_root / "src" / "main";
+    const std::filesystem::path package_root = java_package_directory(
+        main_root / "java", config().app_id());
 
     const std::pair<std::filesystem::path, std::string> files[]{
         {directory / "settings.gradle", render_settings_gradle(*this)},
         {directory / "build.gradle", render_root_build_gradle(*this)},
         {directory / "gradle.properties", render_gradle_properties()},
-        {directory / "app" / "build.gradle", render_app_build_gradle(*this)}};
+        {app_root / "build.gradle", render_app_build_gradle(*this)},
+        {main_root / "AndroidManifest.xml", render_manifest(*this)},
+        {package_root / "MainActivity.java", render_main_activity(*this)},
+        {main_root / "res" / "values" / "strings.xml", render_strings_xml(*this)},
+        {main_root / "res" / "values" / "colors.xml", render_colors_xml()},
+        {main_root / "res" / "values" / "styles.xml", render_styles_xml()}};
 
     for (const auto &[path, content] : files)
     {
       Result<void> write_result = write_text_file(path, content);
+      if (write_result.is_failed())
+      {
+        return write_result;
+      }
+    }
+
+    const std::filesystem::path sdk_directory = detect_android_sdk_directory();
+    if (!sdk_directory.empty())
+    {
+      Result<void> write_result = write_text_file(
+          directory / "local.properties",
+          "sdk.dir=" + local_properties_path(sdk_directory) + "\n");
       if (write_result.is_failed())
       {
         return write_result;
@@ -331,6 +709,13 @@ namespace vix::ui
       return Result<void>::fail(
           ErrorCode::ConfigError,
           "Android project Android Gradle Plugin version must not be empty");
+    }
+
+    if (!valid_package_name(config().app_id()))
+    {
+      return Result<void>::fail(
+          ErrorCode::ConfigError,
+          "Android project application id is not a valid Java package name");
     }
 
     return Result<void>::ok();
