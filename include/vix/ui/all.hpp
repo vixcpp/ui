@@ -81,6 +81,11 @@
 #include <vix/ui/platform/Platform.hpp>
 
 /*
+ * Mobile
+ */
+#include <vix/ui/mobile/MobileConfig.hpp>
+
+/*
  * Shell
  */
 #include <vix/ui/shell/AppShell.hpp>
