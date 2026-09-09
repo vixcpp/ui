@@ -224,12 +224,19 @@ static void test_generates_base_android_files()
   assert(manifest.find("android:usesCleartextTraffic") == std::string::npos);
   assert(manifest.find("READ_EXTERNAL_STORAGE") == std::string::npos);
   assert(manifest.find("WRITE_EXTERNAL_STORAGE") == std::string::npos);
+  const std::size_t permission = manifest.find("<uses-permission");
+  assert(permission != std::string::npos);
+  assert(manifest.find("<uses-permission", permission + 1) ==
+         std::string::npos);
   assert(activity.find("package com.softadastra.vix.mobile.demo;") != std::string::npos);
   assert(activity.find("https://example.test") != std::string::npos);
   assert(activity.find("settings.setJavaScriptEnabled(true);") != std::string::npos);
   assert(activity.find("settings.setDomStorageEnabled(true);") != std::string::npos);
   assert(activity.find("settings.setAllowFileAccess(false);") != std::string::npos);
   assert(activity.find("settings.setAllowContentAccess(false);") != std::string::npos);
+  assert(activity.find("setAllowUniversalAccessFromFileURLs") ==
+         std::string::npos);
+  assert(activity.find("setAllowFileAccessFromFileURLs") == std::string::npos);
   assert(activity.find("WebChromeClient") != std::string::npos);
   assert(activity.find("onShowFileChooser") != std::string::npos);
   assert(activity.find("ValueCallback<Uri[]>") != std::string::npos);
@@ -248,10 +255,14 @@ static void test_generates_base_android_files()
          std::string::npos);
   assert(activity.find("VISIBILITY_VISIBLE_NOTIFY_COMPLETED") !=
          std::string::npos);
-  assert(activity.find("WRITE_EXTERNAL_STORAGE") == std::string::npos);
+  assert(activity.find("if (!isHttpOrHttps(downloadUri))") !=
+         std::string::npos);
   assert(activity.find("return handleNavigation(request.getUrl());") !=
          std::string::npos);
   assert(activity.find("initialHost.equalsIgnoreCase(host)") !=
+         std::string::npos);
+  assert(activity.find("if (isHttpOrHttps(uri))") != std::string::npos);
+  assert(activity.find("private boolean isHttpOrHttps(Uri uri)") !=
          std::string::npos);
   assert(activity.find("Intent.ACTION_VIEW") != std::string::npos);
   assert(activity.find("Intent.CATEGORY_BROWSABLE") != std::string::npos);

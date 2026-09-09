@@ -102,7 +102,7 @@ namespace vix::ui
     std::string name_{"Vix Mobile App"};
     std::string app_id_;
     std::string version_{"0.1.0"};
-    std::string url_{"http://127.0.0.1:8080"};
+    std::string url_{"https://example.com"};
     std::string icon_path_;
   };
 

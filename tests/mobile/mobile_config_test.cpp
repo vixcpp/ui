@@ -27,7 +27,7 @@ static void test_default_config()
   assert(config.name() == "Vix Mobile App");
   assert(config.app_id().empty());
   assert(config.version() == "0.1.0");
-  assert(config.url() == "http://127.0.0.1:8080");
+  assert(config.url() == "https://example.com");
   assert(config.icon_path().empty());
 
   assert(config.has_name());
@@ -43,7 +43,7 @@ static void test_make()
 
   assert(config.name() == "Vix Mobile App");
   assert(config.version() == "0.1.0");
-  assert(config.url() == "http://127.0.0.1:8080");
+  assert(config.url() == "https://example.com");
 }
 
 static void test_setters_and_chaining()
