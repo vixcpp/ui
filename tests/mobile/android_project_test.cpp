@@ -222,12 +222,33 @@ static void test_generates_base_android_files()
   assert(manifest.find("android:label=\"@string/app_name\"") != std::string::npos);
   assert(manifest.find("android:theme=\"@style/AppTheme\"") != std::string::npos);
   assert(manifest.find("android:usesCleartextTraffic") == std::string::npos);
+  assert(manifest.find("READ_EXTERNAL_STORAGE") == std::string::npos);
+  assert(manifest.find("WRITE_EXTERNAL_STORAGE") == std::string::npos);
   assert(activity.find("package com.softadastra.vix.mobile.demo;") != std::string::npos);
   assert(activity.find("https://example.test") != std::string::npos);
   assert(activity.find("settings.setJavaScriptEnabled(true);") != std::string::npos);
   assert(activity.find("settings.setDomStorageEnabled(true);") != std::string::npos);
   assert(activity.find("settings.setAllowFileAccess(false);") != std::string::npos);
   assert(activity.find("settings.setAllowContentAccess(false);") != std::string::npos);
+  assert(activity.find("WebChromeClient") != std::string::npos);
+  assert(activity.find("onShowFileChooser") != std::string::npos);
+  assert(activity.find("ValueCallback<Uri[]>") != std::string::npos);
+  assert(activity.find("FileChooserParams") != std::string::npos);
+  assert(activity.find("Intent.EXTRA_ALLOW_MULTIPLE") != std::string::npos);
+  assert(activity.find("FileChooserParams.MODE_OPEN_MULTIPLE") !=
+         std::string::npos);
+  assert(activity.find("WebChromeClient.FileChooserParams.parseResult") !=
+         std::string::npos);
+  assert(activity.find("fileChooserCallback.onReceiveValue(null);") !=
+         std::string::npos);
+  assert(activity.find("setDownloadListener") != std::string::npos);
+  assert(activity.find("DownloadManager.Request") != std::string::npos);
+  assert(activity.find("URLUtil.guessFileName") != std::string::npos);
+  assert(activity.find("CookieManager.getInstance().getCookie") !=
+         std::string::npos);
+  assert(activity.find("VISIBILITY_VISIBLE_NOTIFY_COMPLETED") !=
+         std::string::npos);
+  assert(activity.find("WRITE_EXTERNAL_STORAGE") == std::string::npos);
   assert(activity.find("return handleNavigation(request.getUrl());") !=
          std::string::npos);
   assert(activity.find("initialHost.equalsIgnoreCase(host)") !=
