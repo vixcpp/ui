@@ -36,6 +36,13 @@ static std::string read_file(const fs::path &path)
   return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
+static void write_file(const fs::path &path, const std::string &content)
+{
+  std::ofstream output(path, std::ios::binary | std::ios::trunc);
+  output << content;
+  assert(output.good());
+}
+
 static MobileProject make_valid_mobile_project()
 {
   MobileConfig config;
@@ -220,6 +227,8 @@ static void test_generates_base_android_files()
       "demo" / "MainActivity.java");
   assert(manifest.find("android.permission.INTERNET") != std::string::npos);
   assert(manifest.find("android:label=\"@string/app_name\"") != std::string::npos);
+  assert(manifest.find("android:icon=\"@mipmap/ic_launcher\"") !=
+         std::string::npos);
   assert(manifest.find("android:theme=\"@style/AppTheme\"") != std::string::npos);
   assert(manifest.find("android:usesCleartextTraffic") == std::string::npos);
   assert(manifest.find("READ_EXTERNAL_STORAGE") == std::string::npos);
@@ -298,6 +307,8 @@ static void test_generates_base_android_files()
          "</resources>\n");
   assert(read_file(main_root / "res" / "values" / "styles.xml").find(
              "<style name=\"AppTheme\"") != std::string::npos);
+  assert(read_file(main_root / "res" / "mipmap" / "ic_launcher.xml").find(
+             "<vector") != std::string::npos);
 
   const fs::path local_properties = directory / "local.properties";
   if (fs::exists(local_properties))
@@ -347,6 +358,9 @@ static void test_generation_is_deterministic()
   const std::string first_activity = read_file(
       directory / "app" / "src" / "main" / "java" / "com" /
       "softadastra" / "vix" / "mobile" / "demo" / "MainActivity.java");
+  const std::string first_icon = read_file(
+      directory / "app" / "src" / "main" / "res" / "mipmap" /
+      "ic_launcher.xml");
 
   assert(project.generate(directory).is_ok());
   assert(read_file(directory / "settings.gradle") == first_settings);
@@ -358,6 +372,8 @@ static void test_generation_is_deterministic()
   assert(read_file(directory / "app" / "src" / "main" / "java" / "com" /
                    "softadastra" / "vix" / "mobile" / "demo" /
                    "MainActivity.java") == first_activity);
+  assert(read_file(directory / "app" / "src" / "main" / "res" / "mipmap" /
+                   "ic_launcher.xml") == first_icon);
 
   fs::remove_all(directory, error);
   assert(!error);
@@ -423,6 +439,60 @@ static void test_invalid_package_name_is_rejected_before_writing()
   assert(!fs::exists(directory));
 }
 
+static void test_configured_png_icon_is_copied_and_referenced()
+{
+  const fs::path directory = test_directory();
+  const fs::path source = fs::temp_directory_path() /
+                          "vix_ui_android_project_icon_source.png";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(source, error);
+  assert(!error);
+
+  const std::string png{"\x89PNG\r\n\x1a\nVix", 12};
+  write_file(source, png);
+
+  AndroidProject project = make_valid_project();
+  project.config().set_icon_path(source.string());
+  assert(project.generate(directory).is_ok());
+
+  const fs::path icon = directory / "app" / "src" / "main" / "res" /
+                        "mipmap" / "ic_launcher.png";
+  assert(fs::is_regular_file(icon));
+  assert(read_file(icon) == png);
+  assert(read_file(directory / "app" / "src" / "main" /
+                   "AndroidManifest.xml")
+             .find("android:icon=\"@mipmap/ic_launcher\"") !=
+         std::string::npos);
+
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(source, error);
+  assert(!error);
+}
+
+static void test_missing_icon_is_rejected_before_writing()
+{
+  const fs::path directory = test_directory();
+  const fs::path missing = fs::temp_directory_path() /
+                           "vix_ui_android_project_missing_icon.png";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(missing, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  project.config().set_icon_path(missing.string());
+  Result<void> result = project.generate(directory);
+
+  assert(result.is_failed());
+  assert(result.error_message() ==
+         "Android project icon path must reference an existing file");
+  assert(!fs::exists(directory));
+}
+
 int main()
 {
   test_default_values();
@@ -439,6 +509,8 @@ int main()
   test_generation_validates_before_writing();
   test_http_enables_cleartext_and_https_does_not();
   test_invalid_package_name_is_rejected_before_writing();
+  test_configured_png_icon_is_copied_and_referenced();
+  test_missing_icon_is_rejected_before_writing();
 
   std::cout << "android_project_test: all tests passed\n";
   return 0;

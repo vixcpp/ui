@@ -381,6 +381,7 @@ namespace vix::ui
           << "    <uses-permission android:name=\"android.permission.INTERNET\" />\n\n"
           << "    <application\n"
           << "        android:allowBackup=\"true\"\n"
+          << "        android:icon=\"@mipmap/ic_launcher\"\n"
           << "        android:label=\"@string/app_name\"\n"
           << "        android:supportsRtl=\"true\"\n"
           << "        android:theme=\"@style/AppTheme\"";
@@ -707,6 +708,22 @@ namespace vix::ui
              "</resources>\n";
     }
 
+    [[nodiscard]] std::string render_default_launcher_icon()
+    {
+      return "<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"\n"
+             "    android:width=\"48dp\"\n"
+             "    android:height=\"48dp\"\n"
+             "    android:viewportWidth=\"48\"\n"
+             "    android:viewportHeight=\"48\">\n"
+             "    <path\n"
+             "        android:fillColor=\"#f37726\"\n"
+             "        android:pathData=\"M0,0h48v48h-48z\" />\n"
+             "    <path\n"
+             "        android:fillColor=\"#ffffff\"\n"
+             "        android:pathData=\"M14,12h20l-10,24z\" />\n"
+             "</vector>\n";
+    }
+
     [[nodiscard]] std::string render_styles_xml()
     {
       return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
@@ -752,6 +769,49 @@ namespace vix::ui
       }
 
       return Result<void>::ok();
+    }
+
+    [[nodiscard]] Result<void> copy_icon_file(
+        const std::filesystem::path &source,
+        const std::filesystem::path &destination)
+    {
+      std::error_code error;
+      std::filesystem::create_directories(destination.parent_path(), error);
+      if (error)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "cannot create Android icon directory: " +
+                destination.parent_path().string() + ": " + error.message());
+      }
+
+      std::filesystem::copy_file(
+          source,
+          destination,
+          std::filesystem::copy_options::overwrite_existing,
+          error);
+      if (error)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "cannot copy Android launcher icon: " + source.string() +
+                ": " + error.message());
+      }
+
+      return Result<void>::ok();
+    }
+
+    [[nodiscard]] bool is_supported_icon_path(
+        const std::filesystem::path &path)
+    {
+      std::string extension = path.extension().string();
+      for (char &character : extension)
+      {
+        character = static_cast<char>(
+            std::tolower(static_cast<unsigned char>(character)));
+      }
+
+      return extension == ".png";
     }
   } // namespace
 
@@ -834,6 +894,7 @@ namespace vix::ui
 
     const std::filesystem::path app_root = directory / "app";
     const std::filesystem::path main_root = app_root / "src" / "main";
+    const std::filesystem::path mipmap_root = main_root / "res" / "mipmap";
     const std::filesystem::path package_root = java_package_directory(
         main_root / "java", config().app_id());
 
@@ -855,6 +916,25 @@ namespace vix::ui
       {
         return write_result;
       }
+    }
+
+    Result<void> icon_result = Result<void>::ok();
+    if (config().has_icon_path())
+    {
+      icon_result = copy_icon_file(
+          config().icon_path(),
+          mipmap_root / "ic_launcher.png");
+    }
+    else
+    {
+      icon_result = write_text_file(
+          mipmap_root / "ic_launcher.xml",
+          render_default_launcher_icon());
+    }
+
+    if (icon_result.is_failed())
+    {
+      return icon_result;
     }
 
     const std::filesystem::path sdk_directory = detect_android_sdk_directory();
@@ -934,6 +1014,25 @@ namespace vix::ui
       return Result<void>::fail(
           ErrorCode::ConfigError,
           "Android project application id is not a valid Java package name");
+    }
+
+    if (config().has_icon_path())
+    {
+      const std::filesystem::path icon_path(config().icon_path());
+      std::error_code error;
+      if (!std::filesystem::is_regular_file(icon_path, error) || error)
+      {
+        return Result<void>::fail(
+            ErrorCode::ConfigError,
+            "Android project icon path must reference an existing file");
+      }
+
+      if (!is_supported_icon_path(icon_path))
+      {
+        return Result<void>::fail(
+            ErrorCode::ConfigError,
+            "Android project icon must be a PNG file");
+      }
     }
 
     return Result<void>::ok();
