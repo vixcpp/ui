@@ -160,6 +160,7 @@ set(UI_SOURCES
   src/platform/Platform.cpp
 
   src/mobile/MobileConfig.cpp
+  src/mobile/MobileProject.cpp
 
   src/shell/ShellConfig.cpp
   src/shell/AppShell.cpp
