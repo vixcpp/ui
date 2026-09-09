@@ -228,8 +228,31 @@ static void test_generates_base_android_files()
   assert(activity.find("settings.setDomStorageEnabled(true);") != std::string::npos);
   assert(activity.find("settings.setAllowFileAccess(false);") != std::string::npos);
   assert(activity.find("settings.setAllowContentAccess(false);") != std::string::npos);
+  assert(activity.find("return handleNavigation(request.getUrl());") !=
+         std::string::npos);
+  assert(activity.find("initialHost.equalsIgnoreCase(host)") !=
+         std::string::npos);
+  assert(activity.find("Intent.ACTION_VIEW") != std::string::npos);
+  assert(activity.find("Intent.CATEGORY_BROWSABLE") != std::string::npos);
+  assert(activity.find("mailto") != std::string::npos);
+  assert(activity.find("tel") != std::string::npos);
+  assert(activity.find("onReceivedError") != std::string::npos);
+  assert(activity.find("request.isForMainFrame()") != std::string::npos);
+  assert(activity.find("onReceivedHttpError") != std::string::npos);
+  assert(activity.find("ERROR_PAGE") != std::string::npos);
+  assert(activity.find("vix://retry") != std::string::npos);
+  assert(activity.find("loadDataWithBaseURL") != std::string::npos);
+  assert(activity.find("webView.restoreState(savedInstanceState)") !=
+         std::string::npos);
+  assert(activity.find("webView.saveState(outState)") != std::string::npos);
+  assert(activity.find("webView.onPause()") != std::string::npos);
+  assert(activity.find("webView.onResume()") != std::string::npos);
   assert(activity.find("webView.canGoBack()") != std::string::npos);
+  assert(activity.find("webView.stopLoading()") != std::string::npos);
+  assert(activity.find("webView.removeAllViews()") != std::string::npos);
   assert(activity.find("webView.destroy();") != std::string::npos);
+  assert(activity.find("onReceivedSslError") == std::string::npos);
+  assert(activity.find("SslErrorHandler") == std::string::npos);
 
   assert(read_file(main_root / "res" / "values" / "strings.xml") ==
          "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
