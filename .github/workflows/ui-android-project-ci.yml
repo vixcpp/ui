@@ -40,7 +40,7 @@ jobs:
   android-project:
     name: Generate and build Android debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout ui repository
@@ -128,3 +128,53 @@ jobs:
           test -n "$apk"
           test -s "$apk"
           echo "Generated APK: $apk"
+          echo "ANDROID_APK=$apk" >> "$GITHUB_ENV"
+
+          app_id="$(sed -n \
+            "s/^[[:space:]]*applicationId '\([^']*\)'.*/\1/p" \
+            android-project-ci/app/build.gradle)"
+          activity_name="$(sed -n \
+            's/.*android:name="\([^"]*\)".*/\1/p' \
+            android-project-ci/app/src/main/AndroidManifest.xml | head -n 1)"
+          test -n "$app_id"
+          test -n "$activity_name"
+
+          if [[ "$activity_name" == .* ]]; then
+            component="$app_id/$app_id$activity_name"
+          else
+            component="$app_id/$activity_name"
+          fi
+
+          echo "ANDROID_APP_ID=$app_id" >> "$GITHUB_ENV"
+          echo "ANDROID_COMPONENT=$component" >> "$GITHUB_ENV"
+
+      - name: Install and launch generated APK on Android Emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -euxo pipefail
+            adb wait-for-device
+            boot_completed="$(adb shell getprop sys.boot_completed | tr -d '\r')"
+            test "$boot_completed" = "1"
+
+            adb install -r "$ANDROID_APK"
+            adb shell am start -W -n "$ANDROID_COMPONENT" | tee activity-start.txt
+            grep -Eq '^Status: ok$|^Warning: Activity not started' activity-start.txt
+
+            sleep 8
+
+            pid="$(adb shell pidof "$ANDROID_APP_ID" | tr -d '\r')"
+            test -n "$pid"
+            adb shell dumpsys activity activities | tr -d '\r' | \
+              grep -F "$ANDROID_COMPONENT"
+
+            adb logcat -b crash -d -v brief > android-crash.log
+            if grep -F "$ANDROID_APP_ID" android-crash.log; then
+              cat android-crash.log
+              exit 1
+            fi
