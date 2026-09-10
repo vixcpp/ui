@@ -77,12 +77,27 @@ namespace vix::ui
 
       for (char character : value)
       {
-        if (character == '\\' || character == '\'')
+        switch (character)
         {
-          result.push_back('\\');
+        case '\\':
+          result += "\\\\";
+          break;
+        case '\'':
+          result += "\\'";
+          break;
+        case '\n':
+          result += "\\n";
+          break;
+        case '\r':
+          result += "\\r";
+          break;
+        case '\t':
+          result += "\\t";
+          break;
+        default:
+          result.push_back(character);
+          break;
         }
-
-        result.push_back(character);
       }
 
       return result;
@@ -172,7 +187,22 @@ namespace vix::ui
         }
       }
 
-      return true;
+      static constexpr std::string_view java_keywords[]{
+          "abstract", "assert", "boolean", "break", "byte", "case",
+          "catch", "char", "class", "const", "continue", "default",
+          "do", "double", "else", "enum", "extends", "final", "finally",
+          "float", "for", "goto", "if", "implements", "import",
+          "instanceof", "int", "interface", "long", "native", "new",
+          "package", "private", "protected", "public", "return", "short",
+          "static", "strictfp", "super", "switch", "synchronized", "this",
+          "throw", "throws", "transient", "try", "void", "volatile",
+          "while", "true", "false", "null", "_", "record", "sealed",
+          "permits", "var", "yield"};
+
+      return std::find(
+                 std::begin(java_keywords),
+                 std::end(java_keywords),
+                 part) == std::end(java_keywords);
     }
 
     [[nodiscard]] bool valid_package_name(std::string_view package_name)
@@ -236,6 +266,11 @@ namespace vix::ui
     [[nodiscard]] bool uses_cleartext(std::string_view url)
     {
       return url.rfind("http://", 0) == 0;
+    }
+
+    [[nodiscard]] bool uses_http_or_https(std::string_view url)
+    {
+      return uses_cleartext(url) || url.rfind("https://", 0) == 0;
     }
 
     [[nodiscard]] std::filesystem::path existing_directory(
@@ -810,6 +845,22 @@ namespace vix::ui
       return Result<void>::ok();
     }
 
+    [[nodiscard]] Result<void> remove_file_if_exists(
+        const std::filesystem::path &path)
+    {
+      std::error_code error;
+      std::filesystem::remove(path, error);
+      if (error)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "cannot remove obsolete Android project file: " +
+                path.string() + ": " + error.message());
+      }
+
+      return Result<void>::ok();
+    }
+
     [[nodiscard]] bool is_supported_icon_path(
         const std::filesystem::path &path)
     {
@@ -1061,8 +1112,28 @@ namespace vix::ui
             "Gradle completed but did not produce an " + extension + " artifact");
       }
 
-      std::sort(artifacts.begin(), artifacts.end());
-      return Result<std::filesystem::path>::ok(std::move(artifacts.front()));
+      const auto newest = std::max_element(
+          artifacts.begin(),
+          artifacts.end(),
+          [](const std::filesystem::path &left,
+             const std::filesystem::path &right)
+          {
+            std::error_code left_error;
+            std::error_code right_error;
+            const auto left_time =
+                std::filesystem::last_write_time(left, left_error);
+            const auto right_time =
+                std::filesystem::last_write_time(right, right_error);
+
+            if (left_error || right_error || left_time == right_time)
+            {
+              return left.string() < right.string();
+            }
+
+            return left_time < right_time;
+          });
+
+      return Result<std::filesystem::path>::ok(*newest);
     }
   } // namespace
 
@@ -1192,12 +1263,24 @@ namespace vix::ui
       icon_result = copy_icon_file(
           config().icon_path(),
           mipmap_root / "ic_launcher.png");
+
+      if (icon_result.is_ok())
+      {
+        icon_result = remove_file_if_exists(
+            mipmap_root / "ic_launcher.xml");
+      }
     }
     else
     {
       icon_result = write_text_file(
           mipmap_root / "ic_launcher.xml",
           render_default_launcher_icon());
+
+      if (icon_result.is_ok())
+      {
+        icon_result = remove_file_if_exists(
+            mipmap_root / "ic_launcher.png");
+      }
     }
 
     if (icon_result.is_failed())
@@ -1214,6 +1297,15 @@ namespace vix::ui
       if (write_result.is_failed())
       {
         return write_result;
+      }
+    }
+    else
+    {
+      Result<void> remove_result = remove_file_if_exists(
+          directory / "local.properties");
+      if (remove_result.is_failed())
+      {
+        return remove_result;
       }
     }
 
@@ -1337,6 +1429,13 @@ namespace vix::ui
       return Result<void>::fail(
           ErrorCode::ConfigError,
           "Android project application id is not a valid Java package name");
+    }
+
+    if (!uses_http_or_https(config().url()))
+    {
+      return Result<void>::fail(
+          ErrorCode::ConfigError,
+          "Android project URL must use http:// or https://");
     }
 
     if (config().has_icon_path())

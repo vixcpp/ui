@@ -14,6 +14,7 @@
  *
  */
 #include <cassert>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -470,6 +471,24 @@ static void test_generation_validates_before_writing()
   assert(!fs::exists(directory));
 }
 
+static void test_generation_supports_output_paths_with_spaces()
+{
+  const fs::path directory = fs::temp_directory_path() /
+                             "vix ui android project output";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  assert(project.generate(directory).is_ok());
+  assert(fs::is_regular_file(directory / "settings.gradle"));
+  assert(fs::is_regular_file(directory / "app" / "src" / "main" /
+                             "AndroidManifest.xml"));
+
+  fs::remove_all(directory, error);
+  assert(!error);
+}
+
 static void test_http_enables_cleartext_and_https_does_not()
 {
   const fs::path directory = test_directory();
@@ -498,6 +517,54 @@ static void test_http_enables_cleartext_and_https_does_not()
   assert(!error);
 }
 
+static void test_special_values_are_escaped_in_generated_files()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  project.config()
+      .set_name("Vix's \"Mobile\" & <App>")
+      .set_version("1.2.3'\\branch\nnext")
+      .set_url("https://example.test/path?q=\"quoted\"&next=one\\two");
+
+  assert(project.generate(directory).is_ok());
+
+  const fs::path main_root = directory / "app" / "src" / "main";
+  assert(read_file(main_root / "res" / "values" / "strings.xml").find(
+             "Vix&apos;s &quot;Mobile&quot; &amp; &lt;App&gt;") !=
+         std::string::npos);
+  assert(read_file(directory / "app" / "build.gradle").find(
+             "versionName '1.2.3\\'\\\\branch\\nnext'") !=
+         std::string::npos);
+  assert(read_file(main_root / "java" / "com" / "softadastra" / "vix" /
+                   "mobile" / "demo" / "MainActivity.java")
+             .find("https://example.test/path?q=\\\"quoted\\\"&next=one\\\\two") !=
+         std::string::npos);
+
+  fs::remove_all(directory, error);
+  assert(!error);
+}
+
+static void test_non_web_url_is_rejected_before_writing()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  project.config().set_url("file:///data/local/tmp/page.html");
+  const Result<void> result = project.generate(directory);
+
+  assert(result.is_failed());
+  assert(result.error_message() ==
+         "Android project URL must use http:// or https://");
+  assert(!fs::exists(directory));
+}
+
 static void test_invalid_package_name_is_rejected_before_writing()
 {
   const fs::path directory = test_directory();
@@ -521,6 +588,8 @@ static void test_invalid_package_names_are_rejected_before_writing()
       "com.example.invalid-package",
       "com..example",
       "com.1example",
+      "com.example.class",
+      "com.example._",
       "example"};
 
   for (const std::string &app_id : invalid_ids)
@@ -567,6 +636,41 @@ static void test_configured_png_icon_is_copied_and_referenced()
                    "AndroidManifest.xml")
              .find("android:icon=\"@mipmap/ic_launcher\"") !=
          std::string::npos);
+
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(source, error);
+  assert(!error);
+}
+
+static void test_regeneration_removes_obsolete_icon_resource()
+{
+  const fs::path directory = test_directory();
+  const fs::path source = fs::temp_directory_path() /
+                          "vix_ui_android_project_regeneration_icon.png";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(source, error);
+  assert(!error);
+  write_file(source, std::string{"\x89PNG\r\n\x1a\nVix", 12});
+
+  AndroidProject project = make_valid_project();
+  assert(project.generate(directory).is_ok());
+
+  const fs::path mipmap = directory / "app" / "src" / "main" / "res" /
+                          "mipmap";
+  assert(fs::is_regular_file(mipmap / "ic_launcher.xml"));
+
+  project.config().set_icon_path(source.string());
+  assert(project.generate(directory).is_ok());
+  assert(fs::is_regular_file(mipmap / "ic_launcher.png"));
+  assert(!fs::exists(mipmap / "ic_launcher.xml"));
+
+  project.config().set_icon_path("");
+  assert(project.generate(directory).is_ok());
+  assert(fs::is_regular_file(mipmap / "ic_launcher.xml"));
+  assert(!fs::exists(mipmap / "ic_launcher.png"));
 
   fs::remove_all(directory, error);
   assert(!error);
@@ -667,6 +771,45 @@ static void test_local_properties_is_absent_without_detected_sdk()
   fs::remove_all(directory, error);
   assert(!error);
 }
+
+static void test_regeneration_removes_stale_local_properties()
+{
+  const fs::path directory = test_directory();
+  const fs::path sdk = fs::temp_directory_path() /
+                       "vix_ui_android_project_stale_sdk";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove_all(sdk, error);
+  assert(!error);
+  assert(fs::create_directories(sdk, error));
+  assert(!error);
+
+  {
+    ScopedEnvironmentVariable android_home("ANDROID_HOME", sdk.c_str());
+    ScopedEnvironmentVariable android_sdk_root("ANDROID_SDK_ROOT", nullptr);
+    ScopedEnvironmentVariable home("HOME", nullptr);
+
+    AndroidProject project = make_valid_project();
+    assert(project.generate(directory).is_ok());
+    assert(fs::exists(directory / "local.properties"));
+  }
+
+  {
+    ScopedEnvironmentVariable android_home("ANDROID_HOME", nullptr);
+    ScopedEnvironmentVariable android_sdk_root("ANDROID_SDK_ROOT", nullptr);
+    ScopedEnvironmentVariable home("HOME", nullptr);
+
+    AndroidProject project = make_valid_project();
+    assert(project.generate(directory).is_ok());
+    assert(!fs::exists(directory / "local.properties"));
+  }
+
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove_all(sdk, error);
+  assert(!error);
+}
 #endif
 
 static void test_build_fails_for_missing_project()
@@ -718,6 +861,18 @@ static void test_build_uses_wrapper_and_resolves_artifacts()
   assert(project.generate(directory).is_ok());
   write_fake_gradle(directory / "gradlew");
   project.set_gradle_command(directory / "missing-gradle");
+
+  const fs::path output_directory = directory / "app" / "build" / "outputs" /
+                                    "apk" / "debug";
+  assert(fs::create_directories(output_directory, error));
+  assert(!error);
+  const fs::path stale_artifact = output_directory / "aaa-stale.apk";
+  write_file(stale_artifact, "stale");
+  fs::last_write_time(
+      stale_artifact,
+      fs::file_time_type::clock::now() - std::chrono::hours(1),
+      error);
+  assert(!error);
 
   Result<fs::path> debug = project.build(
       directory,
@@ -802,15 +957,20 @@ int main()
   test_generates_base_android_files();
   test_generation_is_deterministic();
   test_generation_validates_before_writing();
+  test_generation_supports_output_paths_with_spaces();
   test_http_enables_cleartext_and_https_does_not();
+  test_special_values_are_escaped_in_generated_files();
+  test_non_web_url_is_rejected_before_writing();
   test_invalid_package_name_is_rejected_before_writing();
   test_invalid_package_names_are_rejected_before_writing();
   test_configured_png_icon_is_copied_and_referenced();
+  test_regeneration_removes_obsolete_icon_resource();
   test_missing_icon_is_rejected_before_writing();
   test_generation_fails_for_file_output_path();
 #if defined(__unix__) || defined(__APPLE__)
   test_local_properties_is_generated_for_detected_sdk();
   test_local_properties_is_absent_without_detected_sdk();
+  test_regeneration_removes_stale_local_properties();
 #endif
   test_build_fails_for_missing_project();
   test_build_fails_for_missing_explicit_gradle();
