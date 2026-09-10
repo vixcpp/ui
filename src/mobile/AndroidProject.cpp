@@ -15,11 +15,20 @@
  */
 #include <vix/ui/mobile/AndroidProject.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <utility>
+#include <vector>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <cerrno>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace vix::ui
 {
@@ -813,6 +822,248 @@ namespace vix::ui
 
       return extension == ".png";
     }
+
+    [[nodiscard]] bool is_regular_path(const std::filesystem::path &path)
+    {
+      std::error_code error;
+      return std::filesystem::is_regular_file(path, error) && !error;
+    }
+
+    [[nodiscard]] std::filesystem::path find_command_on_path(
+        const std::filesystem::path &command)
+    {
+      if (command.has_parent_path())
+      {
+        return is_regular_path(command) ? command : std::filesystem::path{};
+      }
+
+      const char *path_environment = std::getenv("PATH");
+      if (path_environment == nullptr || *path_environment == '\0')
+      {
+        return {};
+      }
+
+#if defined(_WIN32)
+      constexpr char separator = ';';
+#else
+      constexpr char separator = ':';
+#endif
+
+      const std::string value(path_environment);
+      std::size_t start = 0;
+
+      while (start <= value.size())
+      {
+        const std::size_t end = value.find(separator, start);
+        const std::string entry = value.substr(start, end - start);
+        const std::filesystem::path candidate =
+            (entry.empty() ? std::filesystem::path{"."} :
+                             std::filesystem::path{entry}) /
+            command;
+
+        if (is_regular_path(candidate))
+        {
+          return candidate;
+        }
+
+        if (end == std::string::npos)
+        {
+          break;
+        }
+
+        start = end + 1;
+      }
+
+      return {};
+    }
+
+    [[nodiscard]] Result<std::filesystem::path> select_gradle_command(
+        const std::filesystem::path &directory,
+        const std::filesystem::path &configured_command)
+    {
+#if defined(_WIN32)
+      const std::filesystem::path wrapper = directory / "gradlew.bat";
+#else
+      const std::filesystem::path wrapper = directory / "gradlew";
+#endif
+
+      if (is_regular_path(wrapper))
+      {
+        return Result<std::filesystem::path>::ok(wrapper);
+      }
+
+      if (!configured_command.empty())
+      {
+        const std::filesystem::path command =
+            find_command_on_path(configured_command);
+        if (command.empty())
+        {
+          return Result<std::filesystem::path>::fail(
+              ErrorCode::ConfigError,
+              "configured Gradle command was not found: " +
+                  configured_command.string());
+        }
+
+        return Result<std::filesystem::path>::ok(command);
+      }
+
+#if defined(_WIN32)
+      const std::filesystem::path system_command{"gradle.bat"};
+#else
+      const std::filesystem::path system_command{"gradle"};
+#endif
+      const std::filesystem::path command = find_command_on_path(system_command);
+      if (command.empty())
+      {
+        return Result<std::filesystem::path>::fail(
+            ErrorCode::RuntimeError,
+            "Gradle executable was not found; add a wrapper, configure Gradle, or add Gradle to PATH");
+      }
+
+      return Result<std::filesystem::path>::ok(command);
+    }
+
+    [[nodiscard]] Result<void> run_gradle_task(
+        const std::filesystem::path &command,
+        const std::filesystem::path &directory,
+        const std::string &task)
+    {
+      std::error_code path_error;
+      const std::filesystem::path executable_path =
+          std::filesystem::absolute(command, path_error);
+      if (path_error)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "cannot resolve Gradle executable: " + command.string());
+      }
+
+#if defined(__unix__) || defined(__APPLE__)
+      const pid_t child = fork();
+      if (child < 0)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "failed to start Gradle process");
+      }
+
+      if (child == 0)
+      {
+        if (chdir(directory.c_str()) != 0)
+        {
+          _exit(127);
+        }
+
+        const std::string executable = executable_path.string();
+        char *const arguments[]{
+            const_cast<char *>(executable.c_str()),
+            const_cast<char *>(task.c_str()),
+            nullptr};
+        execv(executable.c_str(), arguments);
+        _exit(127);
+      }
+
+      int status = 0;
+      if (waitpid(child, &status, 0) < 0)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "failed while waiting for Gradle");
+      }
+
+      if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+      {
+        const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "Gradle task failed: " + task + " (exit code " +
+                std::to_string(code) + ")");
+      }
+
+      return Result<void>::ok();
+#elif defined(_WIN32)
+      const std::string invocation =
+          "cd /d \"" + directory.string() + "\" && \"" +
+          executable_path.string() + "\" " + task;
+      const int status = std::system(invocation.c_str());
+      if (status != 0)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "Gradle task failed: " + task + " (exit code " +
+                std::to_string(status) + ")");
+      }
+
+      return Result<void>::ok();
+#else
+      (void)executable_path;
+      (void)directory;
+      (void)task;
+      return Result<void>::fail(
+          ErrorCode::RuntimeError,
+          "Android builds are not supported on this platform yet");
+#endif
+    }
+
+    [[nodiscard]] Result<std::filesystem::path> resolve_artifact_path(
+        const std::filesystem::path &directory,
+        AndroidBuildType type,
+        AndroidArtifact artifact)
+    {
+      const std::string variant =
+          type == AndroidBuildType::Debug ? "debug" : "release";
+      const std::filesystem::path output_directory =
+          artifact == AndroidArtifact::Apk
+              ? directory / "app" / "build" / "outputs" / "apk" / variant
+              : directory / "app" / "build" / "outputs" / "bundle" / variant;
+      const std::string extension =
+          artifact == AndroidArtifact::Apk ? ".apk" : ".aab";
+
+      std::error_code error;
+      if (!std::filesystem::is_directory(output_directory, error) || error)
+      {
+        return Result<std::filesystem::path>::fail(
+            ErrorCode::RuntimeError,
+            "Gradle completed but did not create the expected artifact directory: " +
+                output_directory.string());
+      }
+
+      std::vector<std::filesystem::path> artifacts;
+      for (std::filesystem::recursive_directory_iterator iterator(
+               output_directory,
+               std::filesystem::directory_options::skip_permission_denied,
+               error);
+           !error && iterator != std::filesystem::recursive_directory_iterator();
+           iterator.increment(error))
+      {
+        if (!iterator->is_regular_file(error) || error)
+        {
+          continue;
+        }
+
+        std::string candidate_extension = iterator->path().extension().string();
+        for (char &character : candidate_extension)
+        {
+          character = static_cast<char>(
+              std::tolower(static_cast<unsigned char>(character)));
+        }
+
+        if (candidate_extension == extension)
+        {
+          artifacts.push_back(iterator->path());
+        }
+      }
+
+      if (error || artifacts.empty())
+      {
+        return Result<std::filesystem::path>::fail(
+            ErrorCode::RuntimeError,
+            "Gradle completed but did not produce an " + extension + " artifact");
+      }
+
+      std::sort(artifacts.begin(), artifacts.end());
+      return Result<std::filesystem::path>::ok(std::move(artifacts.front()));
+    }
   } // namespace
 
   AndroidProject::AndroidProject(MobileProject project)
@@ -851,6 +1102,13 @@ namespace vix::ui
     return *this;
   }
 
+  AndroidProject &AndroidProject::set_gradle_command(
+      std::filesystem::path command)
+  {
+    gradle_command_ = std::move(command);
+    return *this;
+  }
+
   int AndroidProject::min_sdk() const noexcept
   {
     return min_sdk_;
@@ -874,6 +1132,16 @@ namespace vix::ui
   const std::string &AndroidProject::android_gradle_plugin_version() const noexcept
   {
     return android_gradle_plugin_version_;
+  }
+
+  const std::filesystem::path &AndroidProject::gradle_command() const noexcept
+  {
+    return gradle_command_;
+  }
+
+  bool AndroidProject::has_gradle_command() const noexcept
+  {
+    return !gradle_command_.empty();
   }
 
   Result<void> AndroidProject::generate(
@@ -950,6 +1218,69 @@ namespace vix::ui
     }
 
     return Result<void>::ok();
+  }
+
+  Result<std::filesystem::path> AndroidProject::build(
+      const std::filesystem::path &directory,
+      AndroidBuildType type,
+      AndroidArtifact artifact) const
+  {
+    Result<void> validation = validate();
+    if (validation.is_failed())
+    {
+      return Result<std::filesystem::path>::fail(
+          validation.error_code(),
+          validation.error_message());
+    }
+
+    if (directory.empty())
+    {
+      return Result<std::filesystem::path>::fail(
+          ErrorCode::ConfigError,
+          "Android project directory must not be empty");
+    }
+
+    if (!is_regular_path(directory / "settings.gradle") ||
+        !is_regular_path(directory / "build.gradle") ||
+        !is_regular_path(directory / "app" / "build.gradle"))
+    {
+      return Result<std::filesystem::path>::fail(
+          ErrorCode::ConfigError,
+          "Android project directory is missing required Gradle files");
+    }
+
+    if (artifact == AndroidArtifact::Aab && type != AndroidBuildType::Release)
+    {
+      return Result<std::filesystem::path>::fail(
+          ErrorCode::ConfigError,
+          "Android App Bundles are only supported for release builds");
+    }
+
+    Result<std::filesystem::path> command = select_gradle_command(
+        directory,
+        gradle_command_);
+    if (command.is_failed())
+    {
+      return command;
+    }
+
+    const std::string task =
+        artifact == AndroidArtifact::Aab
+            ? "bundleRelease"
+            : (type == AndroidBuildType::Debug ? "assembleDebug" :
+                                                 "assembleRelease");
+    Result<void> build_result = run_gradle_task(
+        command.value(),
+        directory,
+        task);
+    if (build_result.is_failed())
+    {
+      return Result<std::filesystem::path>::fail(
+          build_result.error_code(),
+          build_result.error_message());
+    }
+
+    return resolve_artifact_path(directory, type, artifact);
   }
 
   Result<void> AndroidProject::validate() const

@@ -43,6 +43,39 @@ static void write_file(const fs::path &path, const std::string &content)
   assert(output.good());
 }
 
+#if defined(__unix__) || defined(__APPLE__)
+static void write_fake_gradle(const fs::path &path)
+{
+  write_file(
+      path,
+      "#!/bin/sh\n"
+      "printf '%s' \"$1\" > gradle-task.txt\n"
+      "case \"$1\" in\n"
+      "  assembleDebug)\n"
+      "    mkdir -p app/build/outputs/apk/debug\n"
+      "    : > app/build/outputs/apk/debug/generated-debug-output.apk\n"
+      "    ;;\n"
+      "  assembleRelease)\n"
+      "    mkdir -p app/build/outputs/apk/release\n"
+      "    : > app/build/outputs/apk/release/generated-release-output.apk\n"
+      "    ;;\n"
+      "  bundleRelease)\n"
+      "    mkdir -p app/build/outputs/bundle/release\n"
+      "    : > app/build/outputs/bundle/release/generated-release-output.aab\n"
+      "    ;;\n"
+      "  *) exit 12 ;;\n"
+      "esac\n");
+
+  std::error_code error;
+  fs::permissions(
+      path,
+      fs::perms::owner_exec,
+      fs::perm_options::add,
+      error);
+  assert(!error);
+}
+#endif
+
 static MobileProject make_valid_mobile_project()
 {
   MobileConfig config;
@@ -335,6 +368,11 @@ static void test_generates_base_android_files()
          "        versionName '1.2.3'\n"
          "    }\n"
          "}\n");
+  const std::string app_build = read_file(directory / "app" / "build.gradle");
+  assert(app_build.find("signingConfigs") == std::string::npos);
+  assert(app_build.find("storeFile") == std::string::npos);
+  assert(app_build.find("storePassword") == std::string::npos);
+  assert(app_build.find("keyPassword") == std::string::npos);
 
   fs::remove_all(directory, error);
   assert(!error);
@@ -493,6 +531,125 @@ static void test_missing_icon_is_rejected_before_writing()
   assert(!fs::exists(directory));
 }
 
+static void test_build_fails_for_missing_project()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  Result<fs::path> result = project.build(directory);
+
+  assert(result.is_failed());
+  assert(result.error_message() ==
+         "Android project directory is missing required Gradle files");
+}
+
+static void test_build_fails_for_missing_explicit_gradle()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  assert(project.generate(directory).is_ok());
+  project.set_gradle_command(directory / "missing-gradle");
+  assert(project.has_gradle_command());
+  assert(project.gradle_command() == directory / "missing-gradle");
+
+  Result<fs::path> result = project.build(directory);
+  assert(result.is_failed());
+  assert(result.error_message().find("configured Gradle command was not found") ==
+         0);
+
+  fs::remove_all(directory, error);
+  assert(!error);
+}
+
+#if defined(__unix__) || defined(__APPLE__)
+static void test_build_uses_wrapper_and_resolves_artifacts()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  assert(project.generate(directory).is_ok());
+  write_fake_gradle(directory / "gradlew");
+  project.set_gradle_command(directory / "missing-gradle");
+
+  Result<fs::path> debug = project.build(
+      directory,
+      AndroidBuildType::Debug,
+      AndroidArtifact::Apk);
+  assert(debug.is_ok());
+  assert(debug.value() == directory / "app" / "build" / "outputs" /
+                              "apk" / "debug" /
+                              "generated-debug-output.apk");
+  assert(read_file(directory / "gradle-task.txt") == "assembleDebug");
+
+  Result<fs::path> release = project.build(
+      directory,
+      AndroidBuildType::Release,
+      AndroidArtifact::Apk);
+  assert(release.is_ok());
+  assert(release.value() == directory / "app" / "build" / "outputs" /
+                                "apk" / "release" /
+                                "generated-release-output.apk");
+  assert(read_file(directory / "gradle-task.txt") == "assembleRelease");
+
+  Result<fs::path> bundle = project.build(
+      directory,
+      AndroidBuildType::Release,
+      AndroidArtifact::Aab);
+  assert(bundle.is_ok());
+  assert(bundle.value() == directory / "app" / "build" / "outputs" /
+                               "bundle" / "release" /
+                               "generated-release-output.aab");
+  assert(read_file(directory / "gradle-task.txt") == "bundleRelease");
+
+  Result<fs::path> invalid = project.build(
+      directory,
+      AndroidBuildType::Debug,
+      AndroidArtifact::Aab);
+  assert(invalid.is_failed());
+  assert(invalid.error_message() ==
+         "Android App Bundles are only supported for release builds");
+
+  fs::remove_all(directory, error);
+  assert(!error);
+}
+
+static void test_build_uses_explicit_gradle_without_wrapper()
+{
+  const fs::path directory = test_directory();
+  const fs::path command = fs::temp_directory_path() /
+                           "vix_ui_android_project_fake_gradle";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(command, error);
+  assert(!error);
+
+  AndroidProject project = make_valid_project();
+  assert(project.generate(directory).is_ok());
+  write_fake_gradle(command);
+  project.set_gradle_command(command);
+
+  Result<fs::path> result = project.build(directory);
+  assert(result.is_ok());
+  assert(read_file(directory / "gradle-task.txt") == "assembleDebug");
+
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove(command, error);
+  assert(!error);
+}
+#endif
+
 int main()
 {
   test_default_values();
@@ -511,6 +668,12 @@ int main()
   test_invalid_package_name_is_rejected_before_writing();
   test_configured_png_icon_is_copied_and_referenced();
   test_missing_icon_is_rejected_before_writing();
+  test_build_fails_for_missing_project();
+  test_build_fails_for_missing_explicit_gradle();
+#if defined(__unix__) || defined(__APPLE__)
+  test_build_uses_wrapper_and_resolves_artifacts();
+  test_build_uses_explicit_gradle_without_wrapper();
+#endif
 
   std::cout << "android_project_test: all tests passed\n";
   return 0;

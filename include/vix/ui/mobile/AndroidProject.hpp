@@ -24,6 +24,24 @@
 namespace vix::ui
 {
   /**
+   * @brief Android build variant.
+   */
+  enum class AndroidBuildType
+  {
+    Debug,
+    Release
+  };
+
+  /**
+   * @brief Android artifact produced by Gradle.
+   */
+  enum class AndroidArtifact
+  {
+    Apk,
+    Aab
+  };
+
+  /**
    * @brief Android-specific configuration for a mobile project.
    *
    * AndroidProject extends the common mobile project boundary with the
@@ -59,6 +77,16 @@ namespace vix::ui
     /** @brief Set the Android Gradle Plugin version. */
     AndroidProject &set_android_gradle_plugin_version(std::string version);
 
+    /**
+     * @brief Set an optional explicit Gradle executable.
+     *
+     * A project Gradle Wrapper still takes precedence over this command.
+     *
+     * @param command Gradle executable path or command name.
+     * @return This Android project.
+     */
+    AndroidProject &set_gradle_command(std::filesystem::path command);
+
     /** @brief Get the minimum supported Android SDK level. */
     [[nodiscard]] int min_sdk() const noexcept;
 
@@ -75,6 +103,20 @@ namespace vix::ui
     [[nodiscard]] const std::string &android_gradle_plugin_version() const noexcept;
 
     /**
+     * @brief Get the optional explicit Gradle executable.
+     *
+     * @return Gradle executable path or command name.
+     */
+    [[nodiscard]] const std::filesystem::path &gradle_command() const noexcept;
+
+    /**
+     * @brief Check whether an explicit Gradle executable is configured.
+     *
+     * @return True when a Gradle command is configured.
+     */
+    [[nodiscard]] bool has_gradle_command() const noexcept;
+
+    /**
      * @brief Generate the base Android project files.
      *
      * The output contains only the Gradle settings and build configuration
@@ -85,6 +127,22 @@ namespace vix::ui
      */
     [[nodiscard]] Result<void> generate(
         const std::filesystem::path &directory) const;
+
+    /**
+     * @brief Build an Android artifact with Gradle.
+     *
+     * The project wrapper is preferred, followed by an explicit Gradle
+     * command and then a Gradle executable found on the system PATH.
+     *
+     * @param directory Generated Android project directory.
+     * @param type Build variant.
+     * @param artifact Artifact kind.
+     * @return Path to the generated artifact.
+     */
+    [[nodiscard]] Result<std::filesystem::path> build(
+        const std::filesystem::path &directory,
+        AndroidBuildType type = AndroidBuildType::Debug,
+        AndroidArtifact artifact = AndroidArtifact::Apk) const;
 
     /**
      * @brief Validate the common and Android-specific configuration.
@@ -99,6 +157,7 @@ namespace vix::ui
     int compile_sdk_{36};
     int version_code_{1};
     std::string android_gradle_plugin_version_{"8.13.2"};
+    std::filesystem::path gradle_command_;
   };
 
 } // namespace vix::ui
