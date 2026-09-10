@@ -14,9 +14,11 @@
  *
  */
 #include <cassert>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -42,6 +44,42 @@ static void write_file(const fs::path &path, const std::string &content)
   output << content;
   assert(output.good());
 }
+
+#if defined(__unix__) || defined(__APPLE__)
+class ScopedEnvironmentVariable
+{
+public:
+  ScopedEnvironmentVariable(const char *name, const char *value)
+      : name_(name)
+  {
+    if (const char *current = std::getenv(name_); current != nullptr)
+    {
+      previous_ = current;
+    }
+
+    const int result = value == nullptr
+                           ? unsetenv(name_)
+                           : setenv(name_, value, 1);
+    assert(result == 0);
+  }
+
+  ~ScopedEnvironmentVariable()
+  {
+    const int result = previous_.has_value()
+                           ? setenv(name_, previous_->c_str(), 1)
+                           : unsetenv(name_);
+    assert(result == 0);
+  }
+
+  ScopedEnvironmentVariable(const ScopedEnvironmentVariable &) = delete;
+  ScopedEnvironmentVariable &operator=(
+      const ScopedEnvironmentVariable &) = delete;
+
+private:
+  const char *name_;
+  std::optional<std::string> previous_;
+};
+#endif
 
 #if defined(__unix__) || defined(__APPLE__)
 static void write_fake_gradle(const fs::path &path)
@@ -477,6 +515,32 @@ static void test_invalid_package_name_is_rejected_before_writing()
   assert(!fs::exists(directory));
 }
 
+static void test_invalid_package_names_are_rejected_before_writing()
+{
+  const std::string invalid_ids[]{
+      "com.example.invalid-package",
+      "com..example",
+      "com.1example",
+      "example"};
+
+  for (const std::string &app_id : invalid_ids)
+  {
+    const fs::path directory = test_directory();
+    std::error_code error;
+    fs::remove_all(directory, error);
+    assert(!error);
+
+    AndroidProject project = make_valid_project();
+    project.config().set_app_id(app_id);
+    const Result<void> result = project.generate(directory);
+
+    assert(result.is_failed());
+    assert(result.error_message() ==
+           "Android project application id is not a valid Java package name");
+    assert(!fs::exists(directory));
+  }
+}
+
 static void test_configured_png_icon_is_copied_and_referenced()
 {
   const fs::path directory = test_directory();
@@ -530,6 +594,80 @@ static void test_missing_icon_is_rejected_before_writing()
          "Android project icon path must reference an existing file");
   assert(!fs::exists(directory));
 }
+
+static void test_generation_fails_for_file_output_path()
+{
+  const fs::path output_file = fs::temp_directory_path() /
+                               "vix_ui_android_project_output_file";
+  std::error_code error;
+  fs::remove(output_file, error);
+  assert(!error);
+  write_file(output_file, "not a directory");
+
+  AndroidProject project = make_valid_project();
+  const Result<void> result = project.generate(output_file);
+
+  assert(result.is_failed());
+  assert(result.error_message().find(
+             "cannot create Android project directory:") == 0);
+  assert(read_file(output_file) == "not a directory");
+
+  fs::remove(output_file, error);
+  assert(!error);
+}
+
+#if defined(__unix__) || defined(__APPLE__)
+static void test_local_properties_is_generated_for_detected_sdk()
+{
+  const fs::path directory = test_directory();
+  const fs::path sdk = fs::temp_directory_path() /
+                       "vix_ui_android_project_fake_sdk";
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove_all(sdk, error);
+  assert(!error);
+  assert(fs::create_directories(sdk, error));
+  assert(!error);
+
+  {
+    ScopedEnvironmentVariable android_home("ANDROID_HOME", sdk.c_str());
+    ScopedEnvironmentVariable android_sdk_root("ANDROID_SDK_ROOT", nullptr);
+    ScopedEnvironmentVariable home("HOME", nullptr);
+
+    AndroidProject project = make_valid_project();
+    assert(project.generate(directory).is_ok());
+    assert(read_file(directory / "local.properties") ==
+           "sdk.dir=" + sdk.string() + "\n");
+  }
+
+  fs::remove_all(directory, error);
+  assert(!error);
+  fs::remove_all(sdk, error);
+  assert(!error);
+}
+
+static void test_local_properties_is_absent_without_detected_sdk()
+{
+  const fs::path directory = test_directory();
+  std::error_code error;
+  fs::remove_all(directory, error);
+  assert(!error);
+
+  {
+    ScopedEnvironmentVariable android_home("ANDROID_HOME", nullptr);
+    ScopedEnvironmentVariable android_sdk_root("ANDROID_SDK_ROOT", nullptr);
+    ScopedEnvironmentVariable home("HOME", nullptr);
+
+    AndroidProject project = make_valid_project();
+    assert(project.generate(directory).is_ok());
+    assert(!fs::exists(directory / "local.properties"));
+  }
+
+  fs::remove_all(directory, error);
+  assert(!error);
+}
+#endif
 
 static void test_build_fails_for_missing_project()
 {
@@ -666,8 +804,14 @@ int main()
   test_generation_validates_before_writing();
   test_http_enables_cleartext_and_https_does_not();
   test_invalid_package_name_is_rejected_before_writing();
+  test_invalid_package_names_are_rejected_before_writing();
   test_configured_png_icon_is_copied_and_referenced();
   test_missing_icon_is_rejected_before_writing();
+  test_generation_fails_for_file_output_path();
+#if defined(__unix__) || defined(__APPLE__)
+  test_local_properties_is_generated_for_detected_sdk();
+  test_local_properties_is_absent_without_detected_sdk();
+#endif
   test_build_fails_for_missing_project();
   test_build_fails_for_missing_explicit_gradle();
 #if defined(__unix__) || defined(__APPLE__)
