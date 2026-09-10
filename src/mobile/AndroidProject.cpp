@@ -1225,14 +1225,6 @@ namespace vix::ui
       AndroidBuildType type,
       AndroidArtifact artifact) const
   {
-    Result<void> validation = validate();
-    if (validation.is_failed())
-    {
-      return Result<std::filesystem::path>::fail(
-          validation.error_code(),
-          validation.error_message());
-    }
-
     if (directory.empty())
     {
       return Result<std::filesystem::path>::fail(
