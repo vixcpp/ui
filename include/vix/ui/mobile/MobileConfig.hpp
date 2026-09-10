@@ -25,8 +25,9 @@ namespace vix::ui
   /**
    * @brief Common identity and configuration for a mobile application.
    *
-   * MobileConfig is platform-independent. Platform build settings belong to
-   * their respective mobile backends.
+   * This value type holds only cross-platform identity and Web application
+   * inputs. Platform build settings and platform-specific icon processing
+   * belong to their respective backends.
    */
   class MobileConfig
   {
@@ -46,16 +47,25 @@ namespace vix::ui
     /** @brief Set the human-readable application name. */
     MobileConfig &set_name(std::string name);
 
-    /** @brief Set the stable application id. */
+    /**
+     * @brief Set the stable application identifier.
+     *
+     * Backends may impose additional identifier rules. For example, Android
+     * requires a valid Java package name.
+     */
     MobileConfig &set_app_id(std::string app_id);
 
     /** @brief Set the application version. */
     MobileConfig &set_version(std::string version);
 
-    /** @brief Set the URL loaded by the mobile application. */
+    /** @brief Set the initial URL loaded by the mobile application. */
     MobileConfig &set_url(std::string url);
 
-    /** @brief Set the optional application icon path. */
+    /**
+     * @brief Set the optional source path for the application icon.
+     *
+     * Supported file formats are backend-specific.
+     */
     MobileConfig &set_icon_path(std::string path);
 
     /** @brief Get the human-readable application name. */
@@ -91,8 +101,9 @@ namespace vix::ui
     /**
      * @brief Validate the required mobile application configuration.
      *
-     * This checks only that the identity fields and target URL are present.
-     * Backend-specific validation is deliberately left to mobile backends.
+     * This checks only that the required common values are present.
+     * Backend-specific format and compatibility checks are deliberately left
+     * to mobile backends.
      *
      * @return Successful result when the required fields are set.
      */

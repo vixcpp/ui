@@ -24,8 +24,9 @@ namespace vix::ui
    * @brief Common mobile project boundary.
    *
    * MobileProject owns the platform-independent configuration shared by
-   * mobile project generators. Platform-specific generation belongs to
-   * their respective backends.
+   * mobile project generators. It is a value boundary, not a polymorphic
+   * generation interface: platform-specific generation belongs to their
+   * respective backends.
    */
   class MobileProject
   {
@@ -37,6 +38,9 @@ namespace vix::ui
 
     /**
      * @brief Construct a mobile project from a configuration.
+     *
+     * The configuration is owned by value, so later changes to the argument
+     * do not affect this project.
      *
      * @param config Mobile application configuration.
      */

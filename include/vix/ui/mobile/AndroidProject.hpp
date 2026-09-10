@@ -25,6 +25,9 @@ namespace vix::ui
 {
   /**
    * @brief Android build variant.
+   *
+   * Release selects Gradle's release variant only; signing remains an
+   * external concern.
    */
   enum class AndroidBuildType
   {
@@ -33,7 +36,9 @@ namespace vix::ui
   };
 
   /**
-   * @brief Android artifact produced by Gradle.
+   * @brief Android artifact requested from Gradle.
+   *
+   * AAB is supported only for release builds.
    */
   enum class AndroidArtifact
   {
@@ -42,10 +47,10 @@ namespace vix::ui
   };
 
   /**
-   * @brief Android-specific configuration for a mobile project.
+   * @brief Android-specific mobile project generator and builder.
    *
-   * AndroidProject extends the common mobile project boundary with the
-   * Android version metadata required by a future project generator.
+   * AndroidProject extends the shared MobileProject value with the Android
+   * metadata required to generate and build a complete Android project.
    */
   class AndroidProject : public MobileProject
   {
@@ -117,27 +122,29 @@ namespace vix::ui
     [[nodiscard]] bool has_gradle_command() const noexcept;
 
     /**
-     * @brief Generate the base Android project files.
+     * @brief Generate or update an Android project in a directory.
      *
-     * The output contains only the Gradle settings and build configuration
-     * required by the Android project skeleton.
+     * Configuration is validated before writing. On success, the directory
+     * contains the Gradle project, manifest, Java activity and required
+     * resources. Existing generated files may be updated.
      *
      * @param directory Output directory for the Android project.
-     * @return Successful result when all files were generated.
+     * @return Failure for invalid configuration or a filesystem error.
      */
     [[nodiscard]] Result<void> generate(
         const std::filesystem::path &directory) const;
 
     /**
-     * @brief Build an Android artifact with Gradle.
+     * @brief Build an APK or AAB from an existing generated Android project.
      *
      * The project wrapper is preferred, followed by an explicit Gradle
      * command and then a Gradle executable found on the system PATH.
      *
-     * @param directory Generated Android project directory.
-     * @param type Build variant.
-     * @param artifact Artifact kind.
-     * @return Path to the generated artifact.
+     * @param directory Directory containing the generated Gradle project.
+     * @param type Gradle build variant.
+     * @param artifact Requested artifact kind.
+     * @return The resolved produced artifact path, or failure when the
+     *         project, Gradle command, Gradle task, or artifact is missing.
      */
     [[nodiscard]] Result<std::filesystem::path> build(
         const std::filesystem::path &directory,
@@ -147,7 +154,8 @@ namespace vix::ui
     /**
      * @brief Validate the common and Android-specific configuration.
      *
-     * @return Successful result when the project configuration is valid.
+     * @return Failure when shared mobile values, Android SDK/version values,
+     *         Android application id, URL scheme, or icon input are invalid.
      */
     [[nodiscard]] Result<void> validate() const;
 
