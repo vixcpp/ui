@@ -48,6 +48,20 @@ ui_add_test(ui_mobile_config_test mobile/mobile_config_test.cpp)
 ui_add_test(ui_mobile_project_test mobile/mobile_project_test.cpp)
 ui_add_test(ui_android_project_test mobile/android_project_test.cpp)
 
+add_executable(ui_android_project_fixture
+  mobile/android_project_fixture.cpp
+)
+
+target_compile_features(ui_android_project_fixture
+  PRIVATE
+    cxx_std_20
+)
+
+target_link_libraries(ui_android_project_fixture
+  PRIVATE
+    vix::ui
+)
+
 ui_add_test(ui_form_test forms/form_test.cpp)
 
 ui_add_test(ui_app_shell_test shell/app_shell_test.cpp)
