@@ -63,6 +63,20 @@ target_link_libraries(ui_android_project_fixture
     vix::ui
 )
 
+add_executable(ui_ios_project_fixture
+  mobile/ios_project_fixture.cpp
+)
+
+target_compile_features(ui_ios_project_fixture
+  PRIVATE
+    cxx_std_20
+)
+
+target_link_libraries(ui_ios_project_fixture
+  PRIVATE
+    vix::ui
+)
+
 ui_add_test(ui_form_test forms/form_test.cpp)
 
 ui_add_test(ui_app_shell_test shell/app_shell_test.cpp)

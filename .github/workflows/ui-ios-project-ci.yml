@@ -1,0 +1,160 @@
+name: UI iOS Project CI
+
+on:
+  push:
+    branches: [main, master, dev, "release/**"]
+    paths:
+      - ".github/workflows/ui-ios-project-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/mobile/**"
+      - "tests/mobile/**"
+      - "tests/CMakeLists.txt"
+  pull_request:
+    branches: [main, master, dev, "release/**"]
+    paths:
+      - ".github/workflows/ui-ios-project-ci.yml"
+      - "CMakeLists.txt"
+      - "cmake/**"
+      - "include/**"
+      - "src/mobile/**"
+      - "tests/mobile/**"
+      - "tests/CMakeLists.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-project:
+    name: Generate, build and launch iOS simulator app
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Checkout ui repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch sibling template dependency
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 https://github.com/vixcpp/template.git ../template
+
+      - name: Show Xcode version
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xcodebuild -version
+
+      - name: Configure ui tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S . -B build-ios-ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUI_BUILD_TESTS=ON \
+            -DUI_BUILD_EXAMPLES=OFF \
+            -DUI_BUILD_BENCHMARKS=OFF \
+            -DUI_INSTALL=OFF \
+            -DVIX_UI_ENABLE_LINUX_WEBVIEW=OFF
+
+      - name: Build ui and iOS test tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake --build build-ios-ci --target \
+            ui ui_ios_project_test ui_ios_project_fixture --parallel 2
+
+      - name: Run IOSProject unit test
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ctest --test-dir build-ios-ci --output-on-failure \
+            --tests-regex '^ui\.ui_ios_project_test$'
+
+      - name: Generate iOS fixture project
+        shell: bash
+        run: |
+          set -euxo pipefail
+          build-ios-ci/tests/ui_ios_project_fixture ios-project-ci
+          project="$(find ios-project-ci -maxdepth 1 -name '*.xcodeproj' \
+            -type d -print -quit)"
+          test -n "$project"
+          scheme="$(basename "$project" .xcodeproj)"
+          bundle_id="$(sed -n \
+            's/.*PRODUCT_BUNDLE_IDENTIFIER = "\([^"]*\)".*/\1/p' \
+            "$project/project.pbxproj" | head -n 1)"
+          test -n "$bundle_id"
+          echo "IOS_PROJECT=$project" >> "$GITHUB_ENV"
+          echo "IOS_SCHEME=$scheme" >> "$GITHUB_ENV"
+          echo "IOS_BUNDLE_ID=$bundle_id" >> "$GITHUB_ENV"
+
+      - name: Create and boot iOS Simulator
+        shell: bash
+        run: |
+          set -euxo pipefail
+          runtime="$(xcrun simctl list runtimes | sed -n \
+            's/.*- \(com\.apple\.CoreSimulator\.SimRuntime\.iOS[^ ]*\) (available).*/\1/p' | head -n 1)"
+          device_type="$(xcrun simctl list devicetypes | awk -F '[()]' \
+            '/iPhone 15/ { print $2; exit }')"
+          test -n "$runtime"
+          test -n "$device_type"
+          udid="$(xcrun simctl create "Vix iOS CI" "$device_type" "$runtime")"
+          echo "IOS_SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Build generated iOS simulator app
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xcodebuild \
+            -project "$IOS_PROJECT" \
+            -scheme "$IOS_SCHEME" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath ios-derived \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+          app="$(find ios-derived/Build/Products/Debug-iphonesimulator \
+            -maxdepth 1 -name '*.app' -type d -print -quit)"
+          test -n "$app"
+          echo "IOS_APP=$app" >> "$GITHUB_ENV"
+
+      - name: Install and launch generated iOS app
+        shell: bash
+        run: |
+          set -euxo pipefail
+          xcrun simctl install "$IOS_SIMULATOR_UDID" "$IOS_APP"
+          pid="$(xcrun simctl launch "$IOS_SIMULATOR_UDID" "$IOS_BUNDLE_ID")"
+          test -n "$pid"
+          echo "IOS_APP_PID=$pid" >> "$GITHUB_ENV"
+
+      - name: Verify generated iOS app remains alive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sleep 5
+          xcrun simctl spawn "$IOS_SIMULATOR_UDID" kill -0 "$IOS_APP_PID"
+          crash_log="$(xcrun simctl spawn "$IOS_SIMULATOR_UDID" log show \
+            --style compact --last 15s \
+            --predicate 'process == "Vix_iOS_CI" AND (eventMessage CONTAINS[c] "fatal" OR eventMessage CONTAINS[c] "crash")')"
+          if [ -n "$crash_log" ]; then
+            printf '%s\n' "$crash_log"
+            exit 1
+          fi
+
+      - name: Shutdown iOS Simulator
+        if: always()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          if [ -n "${IOS_SIMULATOR_UDID:-}" ]; then
+            xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
+            xcrun simctl delete "$IOS_SIMULATOR_UDID" || true
+          fi
