@@ -452,22 +452,30 @@ namespace vix::ui
     [[nodiscard]] std::string render_view_controller(const IOSProject &project)
     {
       return "import UIKit\n"
+             "import UniformTypeIdentifiers\n"
              "import WebKit\n\n"
-             "final class ViewController: UIViewController, WKNavigationDelegate {\n"
+             "final class ViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, UIDocumentPickerDelegate, WKDownloadDelegate {\n"
              "    private let appURL = URL(string: \"" +
              swift_string(project.config().url()) +
              "\")!\n"
+             "    private let retryURL = URL(string: \"vix://retry\")!\n"
+             "    private var openPanelCompletionHandler: (([URL]?) -> Void)?\n"
+             "    private weak var documentPicker: UIDocumentPickerViewController?\n"
              "    private lazy var webView: WKWebView = {\n"
              "        let configuration = WKWebViewConfiguration()\n"
              "        configuration.preferences.javaScriptEnabled = true\n"
              "        let view = WKWebView(frame: .zero, configuration: configuration)\n"
              "        view.navigationDelegate = self\n"
+             "        view.uiDelegate = self\n"
              "        view.allowsBackForwardNavigationGestures = true\n"
              "        return view\n"
              "    }()\n\n"
              "    override func viewDidLoad() {\n"
              "        super.viewDidLoad()\n"
              "        view = webView\n"
+             "        webView.load(URLRequest(url: appURL))\n"
+             "    }\n\n"
+             "    private func loadInitialURL() {\n"
              "        webView.load(URLRequest(url: appURL))\n"
              "    }\n\n"
              "    func webView(\n"
@@ -480,8 +488,15 @@ namespace vix::ui
              "            decisionHandler(.cancel)\n"
              "            return\n"
              "        }\n\n"
+             "        if url == retryURL {\n"
+             "            loadInitialURL()\n"
+             "            decisionHandler(.cancel)\n"
+             "            return\n"
+             "        }\n\n"
              "        if scheme == \"http\" || scheme == \"https\" {\n"
-             "            if url.host?.caseInsensitiveCompare(appURL.host ?? \"\") == .orderedSame {\n"
+             "            if let host = url.host,\n"
+             "               let appHost = appURL.host,\n"
+             "               host.caseInsensitiveCompare(appHost) == .orderedSame {\n"
              "                decisionHandler(.allow)\n"
              "            } else {\n"
              "                openExternally(url)\n"
@@ -494,40 +509,127 @@ namespace vix::ui
              "        }\n"
              "        decisionHandler(.cancel)\n"
              "    }\n\n"
+             "    func webView(\n"
+             "        _ webView: WKWebView,\n"
+             "        decidePolicyFor navigationResponse: WKNavigationResponse,\n"
+             "        decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void\n"
+             "    ) {\n"
+             "        decisionHandler(navigationResponse.canShowMIMEType ? .allow : .download)\n"
+             "    }\n\n"
+             "    func webView(\n"
+             "        _ webView: WKWebView,\n"
+             "        navigationAction: WKNavigationAction,\n"
+             "        didBecome download: WKDownload\n"
+             "    ) {\n"
+             "        download.delegate = self\n"
+             "    }\n\n"
+             "    func webView(\n"
+             "        _ webView: WKWebView,\n"
+             "        navigationResponse: WKNavigationResponse,\n"
+             "        didBecome download: WKDownload\n"
+             "    ) {\n"
+             "        download.delegate = self\n"
+             "    }\n\n"
+             "    func download(\n"
+             "        _ download: WKDownload,\n"
+             "        decideDestinationUsing response: URLResponse,\n"
+             "        suggestedFilename: String,\n"
+             "        completionHandler: @escaping (URL?) -> Void\n"
+             "    ) {\n"
+             "        guard let url = response.url,\n"
+             "              url.scheme == \"http\" || url.scheme == \"https\" else {\n"
+             "            completionHandler(nil)\n"
+             "            return\n"
+             "        }\n"
+             "        let destination = FileManager.default.urls(\n"
+             "            for: .documentDirectory,\n"
+             "            in: .userDomainMask\n"
+             "        )[0].appendingPathComponent(suggestedFilename)\n"
+             "        completionHandler(destination)\n"
+             "    }\n\n"
+             "    func webView(\n"
+             "        _ webView: WKWebView,\n"
+             "        runOpenPanelWith parameters: WKOpenPanelParameters,\n"
+             "        initiatedByFrame frame: WKFrameInfo,\n"
+             "        completionHandler: @escaping ([URL]?) -> Void\n"
+             "    ) {\n"
+             "        openPanelCompletionHandler?(nil)\n"
+             "        openPanelCompletionHandler = completionHandler\n"
+             "        let picker = UIDocumentPickerViewController(\n"
+             "            forOpeningContentTypes: [UTType.item],\n"
+             "            asCopy: true\n"
+             "        )\n"
+             "        picker.allowsMultipleSelection = parameters.allowsMultipleSelection\n"
+             "        picker.delegate = self\n"
+             "        documentPicker = picker\n"
+             "        present(picker, animated: true)\n"
+             "    }\n\n"
+             "    func documentPicker(\n"
+             "        _ controller: UIDocumentPickerViewController,\n"
+             "        didPickDocumentsAt urls: [URL]\n"
+             "    ) {\n"
+             "        openPanelCompletionHandler?(urls)\n"
+             "        openPanelCompletionHandler = nil\n"
+             "    }\n\n"
+             "    func documentPickerWasCancelled(\n"
+             "        _ controller: UIDocumentPickerViewController\n"
+             "    ) {\n"
+             "        openPanelCompletionHandler?(nil)\n"
+             "        openPanelCompletionHandler = nil\n"
+             "    }\n\n"
+             "    func webView(\n"
+             "        _ webView: WKWebView,\n"
+             "        didFailProvisionalNavigation navigation: WKNavigation?,\n"
+             "        withError error: Error\n"
+             "    ) {\n"
+             "        showErrorPage(for: error)\n"
+             "    }\n\n"
+             "    func webView(\n"
+             "        _ webView: WKWebView,\n"
+             "        didFail navigation: WKNavigation?,\n"
+             "        withError error: Error\n"
+             "    ) {\n"
+             "        showErrorPage(for: error)\n"
+             "    }\n\n"
+             "    private func showErrorPage(for error: Error) {\n"
+             "        guard (error as NSError).code != NSURLErrorCancelled else { return }\n"
+             "        let page = \"<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'></head><body><h1>Unable to load the application</h1><p>Please check your connection and try again.</p><button onclick=\\\"location.href='vix://retry'\\\">Retry</button></body></html>\"\n"
+             "        webView.loadHTMLString(page, baseURL: nil)\n"
+             "    }\n\n"
              "    private func openExternally(_ url: URL) {\n"
              "        guard UIApplication.shared.canOpenURL(url) else { return }\n"
              "        UIApplication.shared.open(url)\n"
              "    }\n\n"
              "    deinit {\n"
              "        webView.stopLoading()\n"
+             "        openPanelCompletionHandler?(nil)\n"
+             "        documentPicker?.delegate = nil\n"
              "        webView.navigationDelegate = nil\n"
              "        webView.uiDelegate = nil\n"
              "    }\n"
              "}\n";
     }
 
-    [[nodiscard]] std::string render_asset_contents(bool has_icon)
+    [[nodiscard]] std::string render_app_icon_contents()
     {
-      if (!has_icon)
-      {
-        return "{\n"
-               "  \"images\" : [\n\n"
-               "  ],\n"
-               "  \"info\" : {\n"
-               "    \"author\" : \"xcode\",\n"
-               "    \"version\" : 1\n"
-               "  }\n"
-               "}\n";
-      }
+      return "{\n"
+             "  \"images\" : [\n\n"
+             "  ],\n"
+             "  \"info\" : {\n"
+             "    \"author\" : \"xcode\",\n"
+             "    \"version\" : 1\n"
+             "  }\n"
+             "}\n";
+    }
 
+    [[nodiscard]] std::string render_branding_contents()
+    {
       return "{\n"
              "  \"images\" : [\n"
              "    {\n"
-             "      \"filename\" : \"AppIcon.png\",\n"
+             "      \"filename\" : \"Icon.png\",\n"
              "      \"idiom\" : \"universal\",\n"
-             "      \"platform\" : \"ios\",\n"
-             "      \"scale\" : \"1x\",\n"
-             "      \"size\" : \"1024x1024\"\n"
+             "      \"scale\" : \"1x\"\n"
              "    }\n"
              "  ],\n"
              "  \"info\" : {\n"
@@ -574,8 +676,8 @@ namespace vix::ui
              "\t\t000000000000000000000601 = {isa = PBXProject; attributes = { LastUpgradeCheck = 1600; }; buildConfigurationList = 000000000000000000000502; compatibilityVersion = \"Xcode 14.0\"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 000000000000000000000201; productRefGroup = 000000000000000000000203; projectDirPath = \"\"; projectRoot = \"\"; targets = (000000000000000000000401); };\n\n"
              "\t\t000000000000000000000701 = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; }; name = Debug; };\n"
              "\t\t000000000000000000000702 = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; }; name = Release; };\n"
-             "\t\t000000000000000000000703 = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = " + project_name + "/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = " + target + "; MARKETING_VERSION = " + version + "; PRODUCT_BUNDLE_IDENTIFIER = " + bundle + "; PRODUCT_NAME = " + project_name + "; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = \"1,2\"; }; name = Debug; };\n"
-             "\t\t000000000000000000000704 = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = " + project_name + "/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = " + target + "; MARKETING_VERSION = " + version + "; PRODUCT_BUNDLE_IDENTIFIER = " + bundle + "; PRODUCT_NAME = " + project_name + "; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = \"1,2\"; }; name = Release; };\n"
+             "\t\t000000000000000000000703 = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = " + project_name + "/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = " + target + "; MARKETING_VERSION = " + version + "; PRODUCT_BUNDLE_IDENTIFIER = " + bundle + "; PRODUCT_NAME = " + project_name + "; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = \"1,2\"; }; name = Debug; };\n"
+             "\t\t000000000000000000000704 = {isa = XCBuildConfiguration; buildSettings = { CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = " + project_name + "/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = " + target + "; MARKETING_VERSION = " + version + "; PRODUCT_BUNDLE_IDENTIFIER = " + bundle + "; PRODUCT_NAME = " + project_name + "; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = \"1,2\"; }; name = Release; };\n"
              "\t\t000000000000000000000501 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000703, 000000000000000000000704); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };\n"
              "\t\t000000000000000000000502 = {isa = XCConfigurationList; buildConfigurations = (000000000000000000000701, 000000000000000000000702); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };\n"
              "\t};\n"
@@ -619,6 +721,8 @@ namespace vix::ui
     const std::filesystem::path project_root = directory / name;
     const std::filesystem::path icon_root =
         project_root / "Assets.xcassets" / "AppIcon.appiconset";
+    const std::filesystem::path branding_root =
+        project_root / "Assets.xcassets" / "Branding.imageset";
 
     const std::pair<std::filesystem::path, std::string> files[]{
         {directory / (name + ".xcodeproj") / "project.pbxproj",
@@ -627,8 +731,7 @@ namespace vix::ui
         {project_root / "SceneDelegate.swift", render_scene_delegate()},
         {project_root / "ViewController.swift", render_view_controller(*this)},
         {project_root / "Info.plist", render_info_plist(*this)},
-        {icon_root / "Contents.json",
-         render_asset_contents(config().has_icon_path())}};
+        {icon_root / "Contents.json", render_app_icon_contents()}};
 
     for (const auto &[path, content] : files)
     {
@@ -643,16 +746,30 @@ namespace vix::ui
     {
       Result<void> icon_result = copy_icon_file(
           config().icon_path(),
-          icon_root / "AppIcon.png");
+          branding_root / "Icon.png");
       if (icon_result.is_failed())
       {
         return icon_result;
+      }
+
+      Result<void> contents_result = write_text_file(
+          branding_root / "Contents.json",
+          render_branding_contents());
+      if (contents_result.is_failed())
+      {
+        return contents_result;
       }
     }
     else
     {
       Result<void> remove_result = remove_file_if_exists(
-          icon_root / "AppIcon.png");
+          branding_root / "Icon.png");
+      if (remove_result.is_failed())
+      {
+        return remove_result;
+      }
+
+      remove_result = remove_file_if_exists(branding_root / "Contents.json");
       if (remove_result.is_failed())
       {
         return remove_result;
