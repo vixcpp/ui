@@ -159,7 +159,7 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: |
-            set -euxo pipefail
+            set -eu
             adb wait-for-device
             boot_completed="$(adb shell getprop sys.boot_completed | tr -d '\r')"
             test "$boot_completed" = "1"

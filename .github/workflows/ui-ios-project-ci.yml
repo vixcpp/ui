@@ -94,7 +94,7 @@ jobs:
         run: |
           set -euxo pipefail
           runtime="$(xcrun simctl list runtimes | sed -n \
-            's/.*- \(com\.apple\.CoreSimulator\.SimRuntime\.iOS[^ ]*\) (available).*/\1/p' | head -n 1)"
+            's/.*- \(com\.apple\.CoreSimulator\.SimRuntime\.iOS[^ ]*\).*/\1/p' | head -n 1)"
           device_type="$(xcrun simctl list devicetypes | awk -F '[()]' \
             '/iPhone 15/ { print $2; exit }')"
           test -n "$runtime"
