@@ -83,13 +83,10 @@ jobs:
           project="$(find ios-project-ci -maxdepth 1 -name '*.xcodeproj' \
             -type d -print -quit)"
           test -n "$project"
-          scheme="$(basename "$project" .xcodeproj)"
           bundle_id="$(sed -n \
             's/.*PRODUCT_BUNDLE_IDENTIFIER = "\([^"]*\)".*/\1/p' \
             "$project/project.pbxproj" | head -n 1)"
           test -n "$bundle_id"
-          echo "IOS_PROJECT=$project" >> "$GITHUB_ENV"
-          echo "IOS_SCHEME=$scheme" >> "$GITHUB_ENV"
           echo "IOS_BUNDLE_ID=$bundle_id" >> "$GITHUB_ENV"
 
       - name: Create and boot iOS Simulator
@@ -111,17 +108,8 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          xcodebuild \
-            -project "$IOS_PROJECT" \
-            -scheme "$IOS_SCHEME" \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID" \
-            -derivedDataPath ios-derived \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
-          app="$(find ios-derived/Build/Products/Debug-iphonesimulator \
+          build-ios-ci/tests/ui_ios_project_fixture ios-project-ci --build
+          app="$(find ios-project-ci/.vix-build/Build/Products/Debug-iphonesimulator \
             -maxdepth 1 -name '*.app' -type d -print -quit)"
           test -n "$app"
           echo "IOS_APP=$app" >> "$GITHUB_ENV"
