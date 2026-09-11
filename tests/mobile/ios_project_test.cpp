@@ -320,6 +320,17 @@ static void test_generation_fails_for_file_output_path()
   assert(!error);
 }
 
+static void test_simulator_build_requires_macos_and_xcode()
+{
+#if !defined(__APPLE__)
+  IOSProject project = make_valid_project();
+  const Result<fs::path> result = project.build(test_directory());
+  assert(result.is_failed());
+  assert(result.error_message() ==
+         "iOS Simulator builds require macOS and Xcode");
+#endif
+}
+
 int main()
 {
   test_default_values_and_configuration();
@@ -331,6 +342,7 @@ int main()
   test_generation_is_deterministic_and_supports_spaces();
   test_special_values_are_escaped_in_swift_plist_and_xcode();
   test_generation_fails_for_file_output_path();
+  test_simulator_build_requires_macos_and_xcode();
 
   std::cout << "ios_project_test: all tests passed\n";
   return 0;

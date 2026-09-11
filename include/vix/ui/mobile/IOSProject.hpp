@@ -23,6 +23,13 @@
 
 namespace vix::ui
 {
+  /** @brief iOS build variant for a simulator application. */
+  enum class IOSBuildType
+  {
+    Debug,
+    Release
+  };
+
   /**
    * @brief iOS mobile project generator.
    *
@@ -56,6 +63,20 @@ namespace vix::ui
      */
     [[nodiscard]] Result<void> generate(
         const std::filesystem::path &directory) const;
+
+    /**
+     * @brief Build a generated iOS Simulator application with Xcode.
+     *
+     * This build is unsigned and intended for simulator installation only.
+     *
+     * @param directory Directory containing the generated Xcode project.
+     * @param type Build variant.
+     * @return The produced .app path, or failure when macOS/Xcode, the
+     *         project, Xcode build, or application output is unavailable.
+     */
+    [[nodiscard]] Result<std::filesystem::path> build(
+        const std::filesystem::path &directory,
+        IOSBuildType type = IOSBuildType::Debug) const;
 
     /**
      * @brief Validate the shared mobile and iOS-specific configuration.

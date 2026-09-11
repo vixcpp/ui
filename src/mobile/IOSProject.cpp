@@ -15,10 +15,18 @@
  */
 #include <vix/ui/mobile/IOSProject.hpp>
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <sstream>
 #include <utility>
+#include <vector>
+
+#if defined(__APPLE__)
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace vix::ui
 {
@@ -350,6 +358,135 @@ namespace vix::ui
 
       return extension == ".png";
     }
+
+#if defined(__APPLE__)
+    [[nodiscard]] bool is_regular_file(const std::filesystem::path &path)
+    {
+      std::error_code error;
+      return std::filesystem::is_regular_file(path, error) && !error;
+    }
+
+    [[nodiscard]] std::filesystem::path find_xcode_project(
+        const std::filesystem::path &directory)
+    {
+      std::error_code error;
+      std::vector<std::filesystem::path> projects;
+
+      for (std::filesystem::directory_iterator iterator(directory, error);
+           !error && iterator != std::filesystem::directory_iterator();
+           iterator.increment(error))
+      {
+        if (iterator->path().extension() == ".xcodeproj" &&
+            std::filesystem::is_directory(iterator->path(), error) && !error)
+        {
+          projects.push_back(iterator->path());
+        }
+      }
+
+      if (error || projects.size() != 1)
+      {
+        return {};
+      }
+
+      return projects.front();
+    }
+
+    [[nodiscard]] Result<void> run_xcodebuild(
+        const std::filesystem::path &project,
+        const std::filesystem::path &derived_data,
+        IOSBuildType type)
+    {
+      const std::string configuration =
+          type == IOSBuildType::Debug ? "Debug" : "Release";
+      const std::string scheme = project.stem().string();
+      const pid_t child = fork();
+
+      if (child < 0)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "failed to start xcodebuild");
+      }
+
+      if (child == 0)
+      {
+        const std::string project_path = project.string();
+        const std::string derived_data_path = derived_data.string();
+        char *const arguments[]{
+            const_cast<char *>("xcodebuild"),
+            const_cast<char *>("-project"),
+            const_cast<char *>(project_path.c_str()),
+            const_cast<char *>("-scheme"),
+            const_cast<char *>(scheme.c_str()),
+            const_cast<char *>("-configuration"),
+            const_cast<char *>(configuration.c_str()),
+            const_cast<char *>("-sdk"),
+            const_cast<char *>("iphonesimulator"),
+            const_cast<char *>("-destination"),
+            const_cast<char *>("generic/platform=iOS Simulator"),
+            const_cast<char *>("-derivedDataPath"),
+            const_cast<char *>(derived_data_path.c_str()),
+            const_cast<char *>("CODE_SIGNING_ALLOWED=NO"),
+            const_cast<char *>("CODE_SIGNING_REQUIRED=NO"),
+            const_cast<char *>("build"),
+            nullptr};
+        execvp("xcodebuild", arguments);
+        _exit(127);
+      }
+
+      int status = 0;
+      if (waitpid(child, &status, 0) < 0)
+      {
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "failed while waiting for xcodebuild");
+      }
+
+      if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+      {
+        const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        return Result<void>::fail(
+            ErrorCode::RuntimeError,
+            "xcodebuild failed (exit code " + std::to_string(code) + ")");
+      }
+
+      return Result<void>::ok();
+    }
+
+    [[nodiscard]] Result<std::filesystem::path> resolve_simulator_app(
+        const std::filesystem::path &derived_data,
+        IOSBuildType type)
+    {
+      const std::string configuration =
+          type == IOSBuildType::Debug ? "Debug" : "Release";
+      const std::filesystem::path output =
+          derived_data / "Build" / "Products" /
+          (configuration + "-iphonesimulator");
+      std::error_code error;
+      std::vector<std::filesystem::path> applications;
+
+      for (std::filesystem::directory_iterator iterator(output, error);
+           !error && iterator != std::filesystem::directory_iterator();
+           iterator.increment(error))
+      {
+        if (iterator->path().extension() == ".app" &&
+            std::filesystem::is_directory(iterator->path(), error) && !error)
+        {
+          applications.push_back(iterator->path());
+        }
+      }
+
+      if (error || applications.empty())
+      {
+        return Result<std::filesystem::path>::fail(
+            ErrorCode::RuntimeError,
+            "xcodebuild completed but did not produce an iOS Simulator .app");
+      }
+
+      std::sort(applications.begin(), applications.end());
+      return Result<std::filesystem::path>::ok(applications.front());
+    }
+#endif
 
     [[nodiscard]] std::string render_info_plist(const IOSProject &project)
     {
@@ -777,6 +914,45 @@ namespace vix::ui
     }
 
     return Result<void>::ok();
+  }
+
+  Result<std::filesystem::path> IOSProject::build(
+      const std::filesystem::path &directory,
+      IOSBuildType type) const
+  {
+#if !defined(__APPLE__)
+    (void)directory;
+    (void)type;
+    return Result<std::filesystem::path>::fail(
+        ErrorCode::RuntimeError,
+        "iOS Simulator builds require macOS and Xcode");
+#else
+    if (directory.empty())
+    {
+      return Result<std::filesystem::path>::fail(
+          ErrorCode::ConfigError,
+          "iOS project directory must not be empty");
+    }
+
+    const std::filesystem::path project = find_xcode_project(directory);
+    if (project.empty() || !is_regular_file(project / "project.pbxproj"))
+    {
+      return Result<std::filesystem::path>::fail(
+          ErrorCode::ConfigError,
+          "iOS project directory is missing a generated Xcode project");
+    }
+
+    const std::filesystem::path derived_data = directory / ".vix-build";
+    Result<void> build_result = run_xcodebuild(project, derived_data, type);
+    if (build_result.is_failed())
+    {
+      return Result<std::filesystem::path>::fail(
+          build_result.error_code(),
+          build_result.error_message());
+    }
+
+    return resolve_simulator_app(derived_data, type);
+#endif
   }
 
   Result<void> IOSProject::validate() const
