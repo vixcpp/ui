@@ -360,7 +360,7 @@ namespace vix::ui
     }
 
 #if defined(__APPLE__)
-    [[nodiscard]] bool is_regular_file(const std::filesystem::path &path)
+    [[nodiscard]] bool is_regular_file_path(const std::filesystem::path &path)
     {
       std::error_code error;
       return std::filesystem::is_regular_file(path, error) && !error;
@@ -935,7 +935,7 @@ namespace vix::ui
     }
 
     const std::filesystem::path project = find_xcode_project(directory);
-    if (project.empty() || !is_regular_file(project / "project.pbxproj"))
+    if (project.empty() || !is_regular_file_path(project / "project.pbxproj"))
     {
       return Result<std::filesystem::path>::fail(
           ErrorCode::ConfigError,

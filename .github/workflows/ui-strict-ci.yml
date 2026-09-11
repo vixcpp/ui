@@ -241,8 +241,8 @@ jobs:
           for exe in "${CANDIDATES[@]}"; do
             base="$(basename "$exe")"
 
-            if [[ "$base" =~ (server|shell|desktop|webview|listener|daemon) ]]; then
-              echo "Skipping server-like or shell-like executable: $exe"
+            if [[ "$base" =~ (server|shell|desktop|webview|listener|daemon|_fixture$) ]]; then
+              echo "Skipping executable requiring special runtime setup: $exe"
               continue
             fi
 
@@ -438,7 +438,7 @@ jobs:
           mapfile -t TEST_BINS < <(
             find build-valgrind -type f -executable 2>/dev/null \
               | grep -E '(test|tests)' \
-              | grep -Ev '(/CMakeFiles/|_bench$|bench$)' \
+              | grep -Ev '(/CMakeFiles/|_bench$|bench$|_fixture$)' \
               | sort
           )
 

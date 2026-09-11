@@ -67,7 +67,9 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          set +o pipefail
           yes | sdkmanager --licenses
+          set -o pipefail
           sdkmanager \
             "platform-tools" \
             "platforms;android-36" \
