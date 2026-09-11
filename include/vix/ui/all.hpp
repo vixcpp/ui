@@ -86,6 +86,7 @@
 #include <vix/ui/mobile/MobileConfig.hpp>
 #include <vix/ui/mobile/MobileProject.hpp>
 #include <vix/ui/mobile/AndroidProject.hpp>
+#include <vix/ui/mobile/IOSProject.hpp>
 
 /*
  * Shell

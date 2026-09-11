@@ -47,6 +47,7 @@ ui_add_test(ui_asset_test assets/asset_test.cpp)
 ui_add_test(ui_mobile_config_test mobile/mobile_config_test.cpp)
 ui_add_test(ui_mobile_project_test mobile/mobile_project_test.cpp)
 ui_add_test(ui_android_project_test mobile/android_project_test.cpp)
+ui_add_test(ui_ios_project_test mobile/ios_project_test.cpp)
 
 add_executable(ui_android_project_fixture
   mobile/android_project_fixture.cpp
